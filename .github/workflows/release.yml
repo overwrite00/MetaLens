@@ -169,6 +169,7 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+          make_latest: true
           files: |
             artifacts/windows-installer/**
             artifacts/linux-packages/**
