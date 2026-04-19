@@ -19,6 +19,7 @@ metalens-sidecar.exe
 # Node
 node_modules/
 frontend/dist/
+electron/frontend/
 frontend/node_modules/
 electron/node_modules/
 electron/out/

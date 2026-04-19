@@ -66,6 +66,9 @@ jobs:
           npm ci
           npm run build
 
+      - name: Copy frontend dist into electron
+        run: cp -r frontend/dist electron/frontend
+
       - name: Package with Electron Forge
         run: |
           cd electron
@@ -123,6 +126,9 @@ jobs:
           cd frontend
           npm ci
           npm run build
+
+      - name: Copy frontend dist into electron
+        run: cp -r frontend/dist electron/frontend
 
       - name: Package with Electron Forge
         run: |

@@ -187,7 +187,7 @@ async function createWindow() {
     // mainWindow.webContents.openDevTools()
   } else {
     await mainWindow.loadFile(
-      path.join(__dirname, '..', 'frontend', 'dist', 'index.html')
+      path.join(__dirname, 'frontend', 'dist', 'index.html')
     )
   }
 
