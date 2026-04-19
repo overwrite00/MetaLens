@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-primary:    #0a0e17;
+  --bg-secondary:  #0f1520;
+  --bg-tertiary:   #1a2234;
+  --border:        #1e3a5f;
+  --accent-cyan:   #00d4ff;
+  --accent-blue:   #0066ff;
+  --accent-purple: #7c3aed;
+  --text-primary:  #e2e8f0;
+  --text-secondary:#64748b;
+  --text-dim:      #334155;
+  --success:       #00ff88;
+  --warning:       #ffaa00;
+  --danger:        #ff4444;
+  --glow-cyan:     0 0 8px #00d4ff40;
+  --glow-blue:     0 0 8px #0066ff40;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Scrollbars ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-secondary); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent-cyan); }
+
+/* ── Selection ── */
+::selection { background: #00d4ff30; color: var(--text-primary); }
+
+/* ── Focus ring ── */
+:focus-visible { outline: 1px solid var(--accent-cyan); outline-offset: 2px; }
+
+/* ── Utility: glow border on hover ── */
+.glow-hover:hover {
+  border-color: var(--accent-cyan) !important;
+  box-shadow: var(--glow-cyan);
+}
+
+/* ── Resize handle ── */
+.resize-handle {
+  width: 4px;
+  cursor: col-resize;
+  background: var(--border);
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.resize-handle:hover { background: var(--accent-cyan); }
