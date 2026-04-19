@@ -4,6 +4,10 @@
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey)
 
+<p align="center">
+  <img src="docs/cover.png" alt="MetaLens — Universal File Metadata Manager" width="860" />
+</p>
+
 **Universal File Metadata Manager** — read, edit, delete and compare metadata across all major file formats.
 
 ---
