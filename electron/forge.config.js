@@ -1,11 +1,15 @@
 const path = require('path')
 const os = require('os')
+const fs = require('fs')
+
+const iconPath = path.join(__dirname, '..', 'frontend', 'public', 'icon')
+const iconExists = ['.ico', '.icns', '.png'].some(ext => fs.existsSync(iconPath + ext))
 
 module.exports = {
   packagerConfig: {
     name: 'MetaLens',
     executableName: 'metalens',
-    icon: path.join(__dirname, '..', 'frontend', 'public', 'icon'),
+    ...(iconExists ? { icon: iconPath } : {}),
     appVersion: '0.1.0',
     extraResource: [
       // Bundled Python sidecar binary (produced by PyInstaller)

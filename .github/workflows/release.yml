@@ -1,0 +1,169 @@
+name: Release Build
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Read version from python/config.py — shared across all jobs
+  # ─────────────────────────────────────────────────────────────────────────────
+  get-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: ver
+        run: |
+          VERSION=$(grep -oP 'VERSION\s*=\s*"\K[^"]+' python/config.py)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building MetaLens v$VERSION"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Windows build → .exe installer (Squirrel)
+  # ─────────────────────────────────────────────────────────────────────────────
+  build-windows:
+    needs: get-version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: python/requirements.txt
+
+      - name: Build Python sidecar
+        run: |
+          cd python
+          pip install -r requirements.txt -q
+          pyinstaller main.py --onefile --name metalens-sidecar --distpath dist --clean --noconfirm `
+            --hidden-import piexif `
+            --hidden-import mutagen `
+            --hidden-import hachoir `
+            --hidden-import olefile `
+            --hidden-import openpyxl `
+            --hidden-import docx `
+            --hidden-import pptx `
+            --hidden-import pypdf
+        shell: pwsh
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build React frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Package with Electron Forge
+        run: |
+          cd electron
+          npm ci
+          npx electron-forge make
+        env:
+          NODE_ENV: production
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: electron/out/make/**/*.exe
+          if-no-files-found: error
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Linux build → .deb + .rpm packages
+  # ─────────────────────────────────────────────────────────────────────────────
+  build-linux:
+    needs: get-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y rpm fakeroot
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: python/requirements.txt
+
+      - name: Build Python sidecar
+        run: |
+          cd python
+          pip install -r requirements.txt -q
+          pyinstaller main.py --onefile --name metalens-sidecar --distpath dist --clean --noconfirm \
+            --hidden-import piexif \
+            --hidden-import mutagen \
+            --hidden-import hachoir \
+            --hidden-import olefile \
+            --hidden-import openpyxl \
+            --hidden-import docx \
+            --hidden-import pptx \
+            --hidden-import pypdf
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build React frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Package with Electron Forge
+        run: |
+          cd electron
+          npm ci
+          npx electron-forge make
+        env:
+          NODE_ENV: production
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            electron/out/make/**/*.deb
+            electron/out/make/**/*.rpm
+          if-no-files-found: error
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Publish GitHub Release with all artifacts
+  # ─────────────────────────────────────────────────────────────────────────────
+  release:
+    needs: [get-version, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.get-version.outputs.version }}
+          name: MetaLens v${{ needs.get-version.outputs.version }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            artifacts/windows-installer/**
+            artifacts/linux-packages/**
