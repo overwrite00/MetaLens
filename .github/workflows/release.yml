@@ -39,6 +39,7 @@ jobs:
         run: |
           cd python
           pip install -r requirements.txt -q
+          pip install pyinstaller -q
           python -m PyInstaller main.py --onefile --name metalens-sidecar --distpath dist --clean --noconfirm `
             --hidden-import piexif `
             --hidden-import mutagen `
@@ -101,6 +102,7 @@ jobs:
         run: |
           cd python
           pip install -r requirements.txt -q
+          pip install pyinstaller -q
           python -m PyInstaller main.py --onefile --name metalens-sidecar --distpath dist --clean --noconfirm \
             --hidden-import piexif \
             --hidden-import mutagen \
