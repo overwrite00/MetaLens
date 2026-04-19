@@ -19,6 +19,7 @@
 - **Full operations**: read, edit, delete individual fields, compare/diff two files
 - **Atomic writes**: temp-file + rename — no file corruption on failure
 - **Undo stack**: 50 operations per session
+- **File integrity hashes**: on-demand MD5 / SHA-1 / SHA-256 / SHA-512 / BLAKE2b with one-click copy
 - **Cyber dark theme**: professional dark UI with cyan/blue accents
 - **Compiled binaries**: no Python or Node.js required to run
 
@@ -87,6 +88,18 @@ cd ../electron && npm run make
 | Office (legacy) | DOC, XLS, PPT | ✅ | — |
 | Any file | Filesystem timestamps, permissions, xattr | ✅ | ✅ |
 | Other | Hundreds of formats via hachoir | ✅ | — |
+
+### File Integrity
+
+Compute cryptographic hashes on demand from the **Metadata** tab — no impact on browsing performance:
+
+| Algorithm | Notes |
+|---|---|
+| MD5 | Legacy, widely used for checksums |
+| SHA-1 | Legacy, used by Git and many tools |
+| SHA-256 | Modern standard, recommended |
+| SHA-512 | High-security workloads |
+| BLAKE2b | Fast modern algorithm, built into Python |
 
 ---
 
