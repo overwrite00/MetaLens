@@ -66,10 +66,8 @@ jobs:
       - name: Package with Electron Forge
         run: |
           cd electron
-          npm ci
+          npm ci --include=dev
           npx electron-forge make
-        env:
-          NODE_ENV: production
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
