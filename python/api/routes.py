@@ -1,4 +1,5 @@
 from __future__ import annotations
+import hashlib
 import os
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,41 @@ router = APIRouter()
 @router.get("/health")
 def health():
     return {"status": "ok", "version": settings.version, "app": settings.app_name}
+
+
+# ──────────────────────────────── /hash ──────────────────────────────────────
+
+_SUPPORTED_ALGORITHMS = {"md5", "sha1", "sha256", "sha512", "blake2b"}
+
+@router.get("/hash")
+def hash_file(
+    path: str = Query(..., description="Absolute file path"),
+    algorithms: str = Query("md5,sha1,sha256,sha512,blake2b", description="Comma-separated list of algorithms"),
+):
+    fpath = Path(path)
+    if not fpath.is_file():
+        raise HTTPException(status_code=404, detail=f"File not found: {path}")
+
+    requested = {a.strip().lower() for a in algorithms.split(",") if a.strip()}
+    unknown = requested - _SUPPORTED_ALGORITHMS
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Unsupported algorithms: {', '.join(unknown)}")
+
+    hashers = {alg: hashlib.new(alg) for alg in requested}
+
+    try:
+        with fpath.open("rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                for h in hashers.values():
+                    h.update(chunk)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return {
+        "path": str(fpath),
+        "size": fpath.stat().st_size,
+        "hashes": {alg: h.hexdigest() for alg, h in hashers.items()},
+    }
 
 
 # ──────────────────────────────── /list ──────────────────────────────────────

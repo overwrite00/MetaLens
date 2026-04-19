@@ -27,10 +27,11 @@ async function api(method, path, body = null) {
 }
 
 export const metalens = {
-  health:    ()              => api('GET',  '/health'),
-  list:      (path)          => api('GET',  `/list?path=${encodeURIComponent(path)}`),
-  read:      (path)          => api('GET',  `/read?path=${encodeURIComponent(path)}`),
-  write:     (path, fields)  => api('POST', '/write',  { path, fields }),
-  delete:    (path, keys)    => api('POST', '/delete', { path, keys }),
-  diff:      (a, b)          => api('GET',  `/diff?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`),
+  health:    ()                    => api('GET',  '/health'),
+  list:      (path)                => api('GET',  `/list?path=${encodeURIComponent(path)}`),
+  read:      (path)                => api('GET',  `/read?path=${encodeURIComponent(path)}`),
+  write:     (path, fields)        => api('POST', '/write',  { path, fields }),
+  delete:    (path, keys)          => api('POST', '/delete', { path, keys }),
+  diff:      (a, b)                => api('GET',  `/diff?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`),
+  hash:      (path, algorithms)    => api('GET',  `/hash?path=${encodeURIComponent(path)}&algorithms=${encodeURIComponent(algorithms)}`),
 }
