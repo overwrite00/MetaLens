@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   # Read version from python/config.py — shared across all jobs
@@ -36,6 +39,7 @@ jobs:
           cache-dependency-path: python/requirements.txt
 
       - name: Build Python sidecar
+        shell: pwsh
         run: |
           cd python
           pip install -r requirements.txt -q
@@ -49,11 +53,10 @@ jobs:
             --hidden-import docx `
             --hidden-import pptx `
             --hidden-import pypdf
-        shell: pwsh
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -86,9 +89,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install system dependencies
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y rpm fakeroot
+        run: sudo apt-get update -qq && sudo apt-get install -y rpm fakeroot
 
       - uses: actions/setup-python@v5
         with:
@@ -113,7 +114,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -126,10 +127,8 @@ jobs:
       - name: Package with Electron Forge
         run: |
           cd electron
-          npm ci
+          npm ci --include=dev
           npx electron-forge make
-        env:
-          NODE_ENV: production
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
