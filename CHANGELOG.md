@@ -12,7 +12,6 @@ Format: [Semantic Versioning](https://semver.org/) — `MAJOR.MINOR.PATCH`
 - Export metadata as CSV/JSON
 - Batch edit on multiple selected files
 - Search/filter bar in file list
-- GitHub Actions CI for automated builds on tag push
 
 ---
 
@@ -36,4 +35,5 @@ Format: [Semantic Versioning](https://semver.org/) — `MAJOR.MINOR.PATCH`
 - Undo stack: 50 operations per session
 - Metadata diff: compare two files side by side
 - About dialog with version from `/health`
+- GitHub Actions CI: automated Windows (.exe) + Linux (.deb/.rpm) builds on push to `main`
 - MIT License — © 2026 Graziano Mariella
