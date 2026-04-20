@@ -4,6 +4,20 @@ const { spawn } = require('child_process')
 const net = require('net')
 const fs = require('fs')
 
+// ─────────────────────── Privacy: disable Chromium network services ──────────
+// Must be called before app.whenReady() to take effect.
+app.commandLine.appendSwitch('disable-background-networking')
+app.commandLine.appendSwitch('disable-client-side-phishing-detection')
+app.commandLine.appendSwitch('disable-component-update')
+app.commandLine.appendSwitch('disable-default-apps')
+app.commandLine.appendSwitch('disable-domain-reliability')
+app.commandLine.appendSwitch('disable-features', 'AutofillServerCommunication,CrashReporting,Reporting')
+app.commandLine.appendSwitch('disable-sync')
+app.commandLine.appendSwitch('metrics-recording-only')
+app.commandLine.appendSwitch('no-first-run')
+app.commandLine.appendSwitch('no-pings')
+app.commandLine.appendSwitch('safebrowsing-disable-auto-update')
+
 let mainWindow = null
 let sidecarProcess = null
 let sidecarPort = null

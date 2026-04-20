@@ -1,15 +1,31 @@
 import { useState, useEffect, useCallback } from 'react'
-import { File, Image, Music, Video, FileText, Archive, AlertCircle } from 'lucide-react'
+import { File, Image, Music, Film, FileText, FileCode, Archive, Aperture, Sheet, Presentation, AlertCircle } from 'lucide-react'
 import { Spinner } from './ui/Spinner'
 import { metalens } from '../api/client'
 
-const HANDLER_ICONS = {
-  image: Image, audio: Music, video: Video,
-  pdf: FileText, office: FileText, ole: FileText,
-}
-
-function getIcon(handler) {
-  return HANDLER_ICONS[handler] || File
+function fileIconAndColor(ext) {
+  const e = (ext || '').toLowerCase().replace('.', '')
+  if (['jpg','jpeg','png','gif','webp','tiff','tif','bmp'].includes(e))
+    return { Icon: Image,        color: 'text-purple-400' }
+  if (['cr2','nef','arw','dng','orf','rw2'].includes(e))
+    return { Icon: Aperture,     color: 'text-purple-300' }
+  if (['mp3','flac','ogg','m4a','wav','aiff','wma','ape','opus'].includes(e))
+    return { Icon: Music,        color: 'text-cyber-success' }
+  if (['mp4','mkv','mov','avi','webm'].includes(e))
+    return { Icon: Film,         color: 'text-cyber-blue' }
+  if (e === 'pdf')
+    return { Icon: FileText,     color: 'text-cyber-danger' }
+  if (['docx','doc'].includes(e))
+    return { Icon: FileText,     color: 'text-sky-400' }
+  if (['xlsx','xls'].includes(e))
+    return { Icon: Sheet,        color: 'text-emerald-400' }
+  if (['pptx','ppt'].includes(e))
+    return { Icon: Presentation, color: 'text-orange-400' }
+  if (['zip','7z','rar','tar','gz','bz2'].includes(e))
+    return { Icon: Archive,      color: 'text-cyber-warning' }
+  if (['txt','json','xml','csv','md','py','js','ts','html','css','yaml','toml','ini'].includes(e))
+    return { Icon: FileCode,     color: 'text-cyber-muted' }
+  return { Icon: File,           color: 'text-cyber-dim' }
 }
 
 function formatSize(bytes) {
@@ -116,7 +132,7 @@ export function FilePanel({ currentPath, onSelectFile, onSelectTwo }) {
           </div>
         )}
         {sorted.map(item => {
-          const Icon = getIcon(item.handler)
+          const { Icon, color } = fileIconAndColor(item.ext)
           const isSel = selected.has(item.path)
           return (
             <div key={item.path}
@@ -128,8 +144,7 @@ export function FilePanel({ currentPath, onSelectFile, onSelectTwo }) {
                   : 'hover:bg-cyber-tertiary border-l-2 border-l-transparent'}`}
             >
               <div className="w-8 flex-shrink-0 flex items-center justify-center">
-                <Icon size={13}
-                  className={isSel ? 'text-cyber-cyan' : 'text-cyber-muted'} />
+                <Icon size={13} className={color} />
               </div>
               <div className="flex-1 min-w-0 py-1.5 pr-2 font-mono text-xs truncate"
                 title={item.name}>

@@ -97,6 +97,9 @@ function TreeNode({ node, depth, expanded, onExpand, selected, onSelect }) {
   const isOpen = expanded[node.path]
   const isSelected = selected === node.path
   const Icon = isOpen ? FolderOpen : (node.type === 'drive' ? HardDrive : Folder)
+  const iconColor = node.type === 'drive'
+    ? 'text-cyber-muted'
+    : isOpen ? 'text-amber-300' : 'text-amber-400'
   const Chevron = isOpen ? ChevronDown : ChevronRight
 
   return (
@@ -111,7 +114,7 @@ function TreeNode({ node, depth, expanded, onExpand, selected, onSelect }) {
             : 'text-cyber-muted hover:text-cyber-text hover:bg-cyber-tertiary'}`}
       >
         <Chevron size={10} className="flex-shrink-0 opacity-60" />
-        <Icon size={12} className="flex-shrink-0" />
+        <Icon size={12} className={`flex-shrink-0 ${iconColor}`} />
         <span className="truncate">{node.name}</span>
       </div>
       {isOpen && node.children && node.children.map(child => (

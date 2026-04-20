@@ -1,8 +1,88 @@
-import { useEffect, useState } from 'react'
-import { GitCompare, Download } from 'lucide-react'
+import { useEffect, useState, useCallback } from 'react'
+import { GitCompare, Download, ShieldCheck, CheckCircle2, XCircle, Hash } from 'lucide-react'
 import { Button } from './ui/Button'
 import { Spinner } from './ui/Spinner'
 import { metalens } from '../api/client'
+
+const HASH_ALGORITHMS = ['md5', 'sha1', 'sha256', 'sha512', 'blake2b']
+
+function DiffHashSection({ fileA, fileB }) {
+  const [hashes, setHashes]   = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState(null)
+
+  useEffect(() => { setHashes(null); setError(null) }, [fileA, fileB])
+
+  const compute = useCallback(async () => {
+    setLoading(true); setError(null)
+    try {
+      const algs = HASH_ALGORITHMS.join(',')
+      const [resA, resB] = await Promise.all([
+        metalens.hash(fileA, algs),
+        metalens.hash(fileB, algs),
+      ])
+      setHashes({ a: resA.hashes, b: resB.hashes })
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [fileA, fileB])
+
+  return (
+    <div className="border-t border-cyber-border mt-1">
+      <div className="flex items-center justify-between px-3 py-2 bg-cyber-bg/30">
+        <div className="flex items-center gap-1.5 text-[10px] font-mono text-cyber-muted uppercase tracking-wider">
+          <ShieldCheck size={11} className="text-cyber-purple" />
+          File Integrity
+        </div>
+        {!hashes && (
+          <button onClick={compute} disabled={loading}
+            className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border border-cyber-border
+              text-cyber-muted hover:text-cyber-cyan hover:border-cyber-cyan transition-colors disabled:opacity-50">
+            {loading ? <Spinner size={10} /> : <Hash size={10} />}
+            {loading ? 'Computing…' : 'Compare Hashes'}
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <div className="px-3 py-2 text-[10px] text-cyber-danger font-mono">{error}</div>
+      )}
+
+      {hashes && (
+        <div className="px-3 py-1">
+          {HASH_ALGORITHMS.map(alg => {
+            const ha = hashes.a[alg]
+            const hb = hashes.b[alg]
+            if (!ha && !hb) return null
+            const match = ha === hb
+            return (
+              <div key={alg} className="flex items-start gap-2 py-1.5 border-b border-cyber-border/40 last:border-0">
+                <span className="w-16 flex-shrink-0 text-[10px] font-mono text-cyber-muted uppercase tracking-wider pt-0.5">
+                  {alg}
+                </span>
+                <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                  <span className="font-mono text-[9px] text-cyber-cyan break-all leading-relaxed">{ha}</span>
+                  <span className="font-mono text-[9px] text-cyber-purple break-all leading-relaxed">{hb}</span>
+                </div>
+                <div className="flex-shrink-0 mt-0.5" title={match ? 'Match' : 'Mismatch'}>
+                  {match
+                    ? <CheckCircle2 size={13} className="text-cyber-success" />
+                    : <XCircle      size={13} className="text-cyber-danger" />}
+                </div>
+              </div>
+            )
+          })}
+          <button onClick={() => setHashes(null)}
+            className="mt-1 mb-1 text-[10px] text-cyber-dim hover:text-cyber-muted transition-colors font-mono">
+            clear
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function DiffView({ fileA, fileB }) {
   const [diff, setDiff] = useState(null)
@@ -86,6 +166,8 @@ export function DiffView({ fileA, fileB }) {
             ))}
           </Section>
         )}
+
+        <DiffHashSection fileA={fileA} fileB={fileB} />
       </div>
     </div>
   )
