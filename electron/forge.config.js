@@ -25,7 +25,13 @@ module.exports = {
       }
     },
     { name: '@electron-forge/maker-zip',      platforms: ['darwin'] },
-    { name: '@electron-forge/maker-deb',      config: {} },
-    { name: '@electron-forge/maker-rpm',      config: {} },
+    { name: '@electron-forge/maker-deb',      config: {
+        options: { icon: path.join(__dirname, '..', 'frontend', 'public', 'icon.png') },
+      }
+    },
+    { name: '@electron-forge/maker-rpm',      config: {
+        options: { icon: path.join(__dirname, '..', 'frontend', 'public', 'icon.png') },
+      }
+    },
   ],
 }
