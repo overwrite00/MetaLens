@@ -19,7 +19,11 @@ module.exports = {
     ignore: [/node_modules/, /\.git/],
   },
   makers: [
-    { name: '@electron-forge/maker-squirrel', config: { name: 'MetaLens' } },
+    { name: '@electron-forge/maker-squirrel', config: {
+        name: 'MetaLens',
+        setupIcon: path.join(__dirname, '..', 'frontend', 'public', 'icon.ico'),
+      }
+    },
     { name: '@electron-forge/maker-zip',      platforms: ['darwin'] },
     { name: '@electron-forge/maker-deb',      config: {} },
     { name: '@electron-forge/maker-rpm',      config: {} },
