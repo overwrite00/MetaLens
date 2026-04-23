@@ -75,6 +75,11 @@ jobs:
       - name: Copy frontend dist into electron
         run: cp -r frontend/dist electron/frontend
 
+      - name: Sync electron/package.json version from python/config.py
+        run: |
+          cd electron
+          npm version ${{ needs.get-version.outputs.version }} --no-git-tag-version --allow-same-version
+
       - name: Package with Electron Forge
         run: |
           cd electron
@@ -89,7 +94,7 @@ jobs:
           if-no-files-found: error
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Linux build → .deb + .rpm packages
+  # Linux build → .deb + .rpm + .tar.gz packages
   # ─────────────────────────────────────────────────────────────────────────────
   build-linux:
     needs: get-version
@@ -136,11 +141,34 @@ jobs:
       - name: Copy frontend dist into electron
         run: cp -r frontend/dist electron/frontend
 
+      - name: Sync electron/package.json version from python/config.py
+        run: |
+          cd electron
+          npm version ${{ needs.get-version.outputs.version }} --no-git-tag-version --allow-same-version
+
+      - name: Configure RPM macros (prevent Build ID conflicts on Fedora/RHEL)
+        # rpmbuild reads ~/.rpmmacros before building. Setting _build_id_links none
+        # prevents the RPM from including /usr/lib/.build-id/ symlinks as package files,
+        # which eliminates conflicts between multiple Electron apps on RPM-based distros.
+        run: echo '%_build_id_links none' >> ~/.rpmmacros
+
       - name: Package with Electron Forge
         run: |
           cd electron
           npm ci --include=dev
           npx electron-forge make
+
+      - name: Create Linux tar.gz (portable archive)
+        run: |
+          VERSION=${{ needs.get-version.outputs.version }}
+          APP_DIR=$(find electron/out -maxdepth 1 -type d -name "MetaLens-linux-*" | head -1)
+          if [ -n "$APP_DIR" ]; then
+            tar -czf "electron/out/make/MetaLens-${VERSION}-Linux.tar.gz" \
+              -C "$(dirname "$APP_DIR")" "$(basename "$APP_DIR")"
+            echo "Created MetaLens-${VERSION}-Linux.tar.gz"
+          else
+            echo "Warning: no MetaLens-linux-* directory found, skipping tar.gz"
+          fi
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
@@ -149,6 +177,7 @@ jobs:
           path: |
             electron/out/make/**/*.deb
             electron/out/make/**/*.rpm
+            electron/out/make/**/*.tar.gz
           if-no-files-found: error
 
   # ─────────────────────────────────────────────────────────────────────────────
