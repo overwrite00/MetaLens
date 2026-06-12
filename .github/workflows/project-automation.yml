@@ -26,6 +26,13 @@ jobs:
           REPO="${{ github.repository }}"
           TOKEN="${{ secrets.GH_PROJECT_TOKEN }}"
 
+          # Nota: i workflow attivati da Dependabot ricevono SOLO i Dependabot secrets.
+          # GH_PROJECT_TOKEN deve essere registrato anche in Settings > Secrets > Dependabot.
+          if [ -z "$TOKEN" ]; then
+            echo "::error::GH_PROJECT_TOKEN is empty. If this run was triggered by Dependabot (actor: ${{ github.actor }}), register the same token as a Dependabot secret: Settings > Secrets and variables > Dependabot."
+            exit 1
+          fi
+
           # Se Issue
           if [ "${{ github.event_name }}" = "issues" ]; then
             ITEM_ID="${{ github.event.issue.node_id }}"
@@ -60,8 +67,9 @@ jobs:
             if echo "$RESPONSE" | jq -e '.data.addProjectV2ItemById.item.id' > /dev/null 2>&1; then
               echo "    Added to Project"
             else
-              echo "    Failed to add to Project"
-              echo "    Details: $(echo "$RESPONSE" | jq '.errors')"
+              echo "::error::Failed to add Issue #$ISSUE_NUM to Project"
+              echo "    Details: $(echo "$RESPONSE" | jq '.errors // .message')"
+              exit 1
             fi
           fi
 
@@ -101,8 +109,9 @@ jobs:
               if echo "$RESPONSE" | jq -e '.data.addProjectV2ItemById.item.id' > /dev/null 2>&1; then
                 echo "    Added to Project"
               else
-                echo "    Failed to add to Project"
-                echo "    Details: $(echo "$RESPONSE" | jq '.errors')"
+                echo "::error::Failed to add PR #$PR_NUM to Project"
+                echo "    Details: $(echo "$RESPONSE" | jq '.errors // .message')"
+                exit 1
               fi
 
               # Richiedi reviewer

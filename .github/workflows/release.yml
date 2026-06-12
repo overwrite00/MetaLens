@@ -22,7 +22,7 @@ jobs:
     outputs:
       version: ${{ steps.ver.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - id: ver
         run: |
           VERSION=$(grep -oP 'VERSION\s*=\s*"\K[^"]+' python/config.py)
@@ -36,7 +36,7 @@ jobs:
     needs: get-version
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v5
         with:
@@ -60,7 +60,7 @@ jobs:
             --hidden-import pptx `
             --hidden-import pypdf
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
           cache: npm
@@ -87,7 +87,7 @@ jobs:
           npx electron-forge make
 
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-installer
           path: electron/out/make/**/*.exe
@@ -100,7 +100,7 @@ jobs:
     needs: get-version
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install system dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y rpm fakeroot
@@ -126,7 +126,7 @@ jobs:
             --hidden-import pptx \
             --hidden-import pypdf
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
           cache: npm
@@ -171,7 +171,7 @@ jobs:
           fi
 
       - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-packages
           path: |
@@ -189,7 +189,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
 
@@ -197,7 +197,7 @@ jobs:
         run: find artifacts -type f
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ needs.get-version.outputs.version }}
           name: MetaLens v${{ needs.get-version.outputs.version }}
