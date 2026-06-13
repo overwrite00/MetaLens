@@ -145,16 +145,6 @@ def validate_directory_path(path_str: str, must_exist: bool = True) -> Path:
                 f"No read/execute permission for directory: {path}"
             )
 
-    if sys.platform == "win32":
-        try:
-            real = Path(os.path.realpath(path))
-            if must_exist and real != path.resolve():
-                pass
-        except (OSError, ValueError) as e:
-            raise PathSecurityError(
-                f"Path realpath validation failed: {e}"
-            ) from e
-
     return path
 
 
