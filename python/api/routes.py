@@ -1,6 +1,5 @@
 from __future__ import annotations
 import hashlib
-import os
 from pathlib import Path
 from typing import Any
 
@@ -99,7 +98,7 @@ def list_directory(path: str = Query(..., description="Absolute directory path")
                 "handler": handler_name,
             })
         except OSError:
-            pass
+            continue
     return {"path": str(dirpath), "items": items}
 
 

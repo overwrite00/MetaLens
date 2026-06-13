@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { FolderPanel } from './components/FolderPanel'
 import { FilePanel } from './components/FilePanel'
 import { DetailPanel } from './components/DetailPanel'

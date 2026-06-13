@@ -4,7 +4,6 @@ from pathlib import Path
 # Make sure `python/` is in sys.path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from main import app

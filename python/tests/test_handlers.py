@@ -1,6 +1,5 @@
 """Tests for metadata handlers — uses synthetic sample files created at runtime."""
 import pytest
-import io
 import shutil
 import tempfile
 from pathlib import Path

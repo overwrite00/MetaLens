@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { File, Image, Music, Film, FileText, FileCode, Archive, Aperture, Sheet, Presentation, AlertCircle } from 'lucide-react'
 import { Spinner } from './ui/Spinner'
 import { metalens } from '../api/client'
@@ -93,10 +93,6 @@ export function FilePanel({ currentPath, onSelectFile, onSelectTwo }) {
       return next
     })
   }
-
-  const SortIcon = ({ col }) => sortKey === col
-    ? <span className="text-cyber-cyan ml-0.5">{sortAsc ? '↑' : '↓'}</span>
-    : null
 
   return (
     <div className="flex flex-col h-full bg-cyber-bg">

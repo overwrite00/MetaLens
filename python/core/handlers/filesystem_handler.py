@@ -58,7 +58,7 @@ class FilesystemHandler(BaseMetadataHandler):
                                 field_type="str", source="xattr"
                             ))
                         except Exception:
-                            pass
+                            continue
                 except ImportError:
                     pass
             else:

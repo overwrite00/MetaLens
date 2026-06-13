@@ -18,7 +18,6 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
-from typing import TypeVar
 
 __all__ = [
     "validate_file_path",
@@ -26,8 +25,6 @@ __all__ = [
     "secure_atomic_write",
     "PathSecurityError",
 ]
-
-PathT = TypeVar("PathT", bound=Path)
 
 
 class PathSecurityError(Exception):

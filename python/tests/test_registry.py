@@ -1,4 +1,3 @@
-import pytest
 from pathlib import Path
 from core.registry import HandlerRegistry
 from core.base_handler import BaseMetadataHandler

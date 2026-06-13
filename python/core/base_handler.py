@@ -14,17 +14,14 @@ class BaseMetadataHandler(ABC):
     @abstractmethod
     def read(self, path: Path) -> MetadataRecord:
         """Read all metadata. Never raises — errors go to record.read_errors."""
-        ...
 
     @abstractmethod
     def write(self, path: Path, fields: list[MetadataField]) -> None:
         """Atomically write changed fields back to file."""
-        ...
 
     @abstractmethod
     def delete(self, path: Path, keys: list[str]) -> None:
         """Delete metadata keys from file."""
-        ...
 
     def can_handle(self, path: Path) -> bool:
         return path.suffix.lower() in self.EXTENSIONS
