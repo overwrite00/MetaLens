@@ -6,7 +6,7 @@ fastapi==0.136.3
 uvicorn==0.49.0
 
 # Images
-Pillow==11.3.0
+Pillow==12.2.0
 piexif==1.1.3
 
 # Audio / Video
@@ -33,6 +33,6 @@ xattr==1.1.0; sys_platform != "win32"
 pywin32==310; sys_platform == "win32"
 
 # Testing
-pytest==8.4.2
+pytest==9.0.3
 pytest-asyncio==0.26.0
 httpx==0.28.1
