@@ -1,0 +1,15 @@
+name: "MetaLens CodeQL Configuration"
+
+# Disable py/path-injection for desktop app context
+# Rationale: MetaLens is a desktop application where file paths come exclusively from
+# the trusted Electron UI (not from untrusted web input). The architecture supports
+# unrestricted filesystem access (the entire drive tree), which is by design.
+# CodeQL conservatively flags all Path() operations as potential injection vectors,
+# but this is a false positive for the desktop threat model.
+
+queries:
+  - uses: security-and-quality
+
+query-filters:
+  - exclude:
+      id: py/path-injection
