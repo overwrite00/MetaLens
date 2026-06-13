@@ -6,9 +6,13 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+import importlib
+
 from config import settings
-from core import handlers as _handlers_pkg  # noqa: F401 — triggers handler registration
 from core.registry import HandlerRegistry
+
+# Trigger handler registration as an explicit side effect.
+importlib.import_module("core.handlers")
 from core.diff import compute_diff
 from core.path_security import validate_file_path, validate_directory_path, PathSecurityError
 
@@ -87,6 +91,7 @@ def list_directory(path: str = Query(..., description="Absolute directory path")
             try:
                 handler_name = HandlerRegistry.get(entry).NAME
             except ValueError:
+                # No handler matches this entry; keep the placeholder name.
                 pass
             items.append({
                 "name": entry.name,

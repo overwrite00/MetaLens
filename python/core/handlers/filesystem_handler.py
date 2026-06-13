@@ -45,6 +45,7 @@ class FilesystemHandler(BaseMetadataHandler):
                                                 grp.getgrgid(st.st_gid).gr_name,
                                                 editable=False, deletable=False, source="filesystem"))
                 except Exception:
+                    # Owner/group lookup is best-effort; skip if unavailable.
                     pass
                 # Extended attributes (Linux/macOS)
                 try:
@@ -60,6 +61,7 @@ class FilesystemHandler(BaseMetadataHandler):
                         except Exception:
                             continue
                 except ImportError:
+                    # xattr library not installed; extended attributes unavailable.
                     pass
             else:
                 # Windows — file attributes flags
@@ -69,6 +71,7 @@ class FilesystemHandler(BaseMetadataHandler):
                         fields.append(MetadataField("fs:win_attrs", "Windows Attributes", attrs,
                                                     editable=False, deletable=False, source="filesystem"))
                 except Exception:
+                    # Windows attribute lookup is best-effort; skip on failure.
                     pass
         except Exception as e:
             errors.append(f"Filesystem read error: {e}")

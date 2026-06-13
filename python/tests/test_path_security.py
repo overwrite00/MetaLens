@@ -157,7 +157,7 @@ class TestValidateDirectoryPath:
                 with pytest.raises(PathSecurityError, match="No read/execute permission"):
                     validate_directory_path(str(test_dir), must_exist=True)
             finally:
-                os.chmod(test_dir, 0o755)
+                os.chmod(test_dir, 0o700)
 
 
 class TestSecureAtomicWrite:
@@ -207,7 +207,6 @@ class TestSecureAtomicWrite:
         secure_atomic_write(test_file, writer)
 
         # Check metadata (note: mtime may differ slightly)
-        new_stat = test_file.stat()
         # Size will definitely change due to content, but mode should be preserved
         assert test_file.stat().st_mode == original_stat.st_mode
 

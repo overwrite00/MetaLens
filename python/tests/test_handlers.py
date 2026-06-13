@@ -1,11 +1,14 @@
 """Tests for metadata handlers — uses synthetic sample files created at runtime."""
+import importlib
 import pytest
 import shutil
 import tempfile
 from pathlib import Path
 
-import core.handlers  # noqa: F401
 from core.registry import HandlerRegistry
+
+# Trigger handler registration as an explicit side effect.
+importlib.import_module("core.handlers")
 
 
 # ──────────────────────── Helpers ────────────────────────────────────────────
