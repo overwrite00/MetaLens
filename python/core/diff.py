@@ -1,6 +1,5 @@
 from __future__ import annotations
 import hashlib
-from pathlib import Path
 
 from core.models import DiffResult, MetadataField, MetadataRecord
 

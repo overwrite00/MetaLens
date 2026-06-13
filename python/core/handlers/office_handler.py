@@ -1,6 +1,5 @@
 from __future__ import annotations
 from pathlib import Path
-from typing import Any
 
 from core.base_handler import BaseMetadataHandler
 from core.models import MetadataField, MetadataRecord
@@ -65,7 +64,7 @@ class OfficeHandler(BaseMetadataHandler):
                     try:
                         setattr(props, attr, f.value)
                     except Exception:
-                        pass
+                        continue
             doc.save(str(tmp))
 
         self._atomic_write(path, _do_write)
@@ -81,7 +80,7 @@ class OfficeHandler(BaseMetadataHandler):
                     try:
                         setattr(props, attr, None)
                     except Exception:
-                        pass
+                        continue
             doc.save(str(tmp))
 
         self._atomic_write(path, _do_delete)

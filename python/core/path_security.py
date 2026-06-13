@@ -27,8 +27,6 @@ __all__ = [
     "PathSecurityError",
 ]
 
-PathT = TypeVar("PathT", bound=Path)
-
 
 class PathSecurityError(Exception):
     """Raised when path validation fails."""

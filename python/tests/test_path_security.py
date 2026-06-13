@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import os
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -149,7 +148,7 @@ class TestValidateDirectoryPath:
     def test_unreadable_directory(self, tmp_path):
         """Directory without read permission should raise error."""
         test_dir = tmp_path / "restricted"
-        test_dir.mkdir()
+        test_dir.mkdir(mode=0o700)
 
         # Skip on Windows (permissions work differently)
         if sys.platform != "win32":
@@ -227,16 +226,16 @@ class TestSecureAtomicWrite:
         test_file = tmp_path / "test.txt"
         test_file.write_text("original")
 
-        captured_temp_path = None
+        temp_path_list = []
 
         def writer(path):
-            nonlocal captured_temp_path
-            captured_temp_path = path
+            temp_path_list.append(path)
             path.write_text("modified")
 
         secure_atomic_write(test_file, writer, temp_suffix=".custom_tmp")
 
-        assert ".custom_tmp" in captured_temp_path.name
+        assert len(temp_path_list) > 0
+        assert ".custom_tmp" in temp_path_list[0].name
 
     def test_atomic_write_binary_content(self, tmp_path):
         """Binary content should be written correctly."""
