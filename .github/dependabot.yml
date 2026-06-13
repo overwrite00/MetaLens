@@ -17,13 +17,23 @@ updates:
     commit-message:
       prefix: "chore(deps-python)"
       include: "scope"
-    pull-request-branch-name:
-      separator: "/"
-    allow:
-      - dependency-type: "all"
+    groups:
+      minor-and-patch:
+        dependency-types:
+          - "production"
+        update-types:
+          - "minor"
+          - "patch"
+      development-updates:
+        dependency-types:
+          - "development"
+        update-types:
+          - "minor"
+          - "patch"
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+        dependency-type: "development"
 
   # Electron app dependencies
   - package-ecosystem: "npm"
@@ -42,13 +52,23 @@ updates:
     commit-message:
       prefix: "chore(deps-electron)"
       include: "scope"
-    pull-request-branch-name:
-      separator: "/"
-    allow:
-      - dependency-type: "all"
+    groups:
+      minor-and-patch:
+        dependency-types:
+          - "production"
+        update-types:
+          - "minor"
+          - "patch"
+      development-updates:
+        dependency-types:
+          - "development"
+        update-types:
+          - "minor"
+          - "patch"
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+        dependency-type: "development"
 
   # Frontend UI dependencies
   - package-ecosystem: "npm"
@@ -67,15 +87,25 @@ updates:
     commit-message:
       prefix: "chore(deps-frontend)"
       include: "scope"
-    pull-request-branch-name:
-      separator: "/"
-    allow:
-      - dependency-type: "all"
+    groups:
+      minor-and-patch:
+        dependency-types:
+          - "production"
+        update-types:
+          - "minor"
+          - "patch"
+      development-updates:
+        dependency-types:
+          - "development"
+        update-types:
+          - "minor"
+          - "patch"
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+        dependency-type: "development"
 
-  # GitHub Actions
+  # GitHub Actions — no major version ignore (CI/CD security-critical)
   - package-ecosystem: "github-actions"
     directory: "/"
     target-branch: "develop"
@@ -92,5 +122,8 @@ updates:
     commit-message:
       prefix: "ci(deps)"
       include: "scope"
-    pull-request-branch-name:
-      separator: "/"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
