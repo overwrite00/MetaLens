@@ -29,9 +29,14 @@ updates:
           - "minor"
           - "patch"
     ignore:
-      - dependency-name: "*"
+      # Dev-only deps: block majors, keep production deps fully updated.
+      # `ignore` does not support `dependency-type`, so dev deps are named explicitly.
+      - dependency-name: "pytest"
         update-types: ["version-update:semver-major"]
-        dependency-type: "development"
+      - dependency-name: "pytest-asyncio"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "httpx"
+        update-types: ["version-update:semver-major"]
 
   # Electron app dependencies
   - package-ecosystem: "npm"
@@ -62,9 +67,12 @@ updates:
           - "minor"
           - "patch"
     ignore:
-      - dependency-name: "*"
+      # Dev-only deps: block majors, keep production deps fully updated.
+      # `ignore` does not support `dependency-type`, so dev deps are named explicitly.
+      - dependency-name: "@electron-forge/*"
         update-types: ["version-update:semver-major"]
-        dependency-type: "development"
+      - dependency-name: "electron"
+        update-types: ["version-update:semver-major"]
 
   # Frontend UI dependencies
   - package-ecosystem: "npm"
@@ -95,9 +103,19 @@ updates:
           - "minor"
           - "patch"
     ignore:
-      - dependency-name: "*"
+      # Dev-only deps: block majors, keep production deps (react, react-dom,
+      # lucide-react) fully updated. `ignore` does not support `dependency-type`,
+      # so dev deps are named explicitly.
+      - dependency-name: "@vitejs/plugin-react"
         update-types: ["version-update:semver-major"]
-        dependency-type: "development"
+      - dependency-name: "vite"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "autoprefixer"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "postcss"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "tailwindcss"
+        update-types: ["version-update:semver-major"]
 
   # GitHub Actions — no major version ignore (CI/CD security-critical)
   - package-ecosystem: "github-actions"
