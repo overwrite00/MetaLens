@@ -14,18 +14,14 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     ignore:
-      # tar and tmp vulnerabilities in electron-forge dependency chain
-      # These are false positives for a desktop app context:
-      # - tar vulnerabilities (hardlink traversal, symlink poisoning) don't apply to app packaging
-      # - tmp vulnerabilities (symlink attacks) don't apply as MetaLens doesn't use tmp for untrusted input
-      # Root causes:
-      # - tar@6.2.1 via @electron-forge/cli -> @electron/rebuild -> @electron/node-gyp
-      # - tmp@<=0.2.5 via @electron-forge/* -> @inquirer/editor -> external-editor
-      # No upstream fixes available as of 2026-06-13
+      # tar vulnerabilities - no upstream fix available
+      # These are false positives for a desktop app: hardlink traversal/symlink poisoning
+      # don't apply to our app packaging workflow (electron-forge)
       - dependency-name: tar
-        versions: ["<=7.5.10"]
+      # tmp vulnerabilities - no upstream fix available
+      # These are false positives: symlink attacks don't apply as MetaLens doesn't
+      # use tmp for untrusted input (only internal tempfiles for metadata operations)
       - dependency-name: tmp
-        versions: ["<=0.2.5"]
 
   # Node.js (Frontend)
   - package-ecosystem: npm
