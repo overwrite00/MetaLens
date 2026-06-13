@@ -1,0 +1,175 @@
+name: Test Build (develop)
+
+on:
+  push:
+    branches: [develop]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'LICENSE'
+      - '*.md'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  get-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: ver
+        run: |
+          VERSION=$(grep -oP 'VERSION\s*=\s*"\K[^"]+' python/config.py)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building MetaLens v$VERSION (test)"
+
+  test-windows:
+    needs: get-version
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: python/requirements.txt
+
+      - name: Build Python sidecar
+        shell: pwsh
+        run: |
+          cd python
+          pip install -r requirements.txt -q
+          pip install pyinstaller -q
+          python -m PyInstaller main.py --onefile --name metalens-sidecar --distpath dist --clean --noconfirm `
+            --hidden-import piexif `
+            --hidden-import mutagen `
+            --hidden-import hachoir `
+            --hidden-import olefile `
+            --hidden-import openpyxl `
+            --hidden-import docx `
+            --hidden-import pptx `
+            --hidden-import pypdf
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build React frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Copy frontend dist into electron
+        run: cp -r frontend/dist electron/frontend
+
+      - name: Sync electron/package.json version from python/config.py
+        run: |
+          cd electron
+          npm version ${{ needs.get-version.outputs.version }} --no-git-tag-version --allow-same-version
+
+      - name: Package with Electron Forge
+        run: |
+          cd electron
+          npm ci --include=dev
+          npx electron-forge make
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-installer-test
+          path: electron/out/make/**/*.exe
+          if-no-files-found: error
+
+  test-linux:
+    needs: get-version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install system dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y rpm fakeroot
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: python/requirements.txt
+
+      - name: Build Python sidecar
+        run: |
+          cd python
+          pip install -r requirements.txt -q
+          pip install pyinstaller -q
+          python -m PyInstaller main.py --onefile --name metalens-sidecar --distpath dist --clean --noconfirm \
+            --hidden-import piexif \
+            --hidden-import mutagen \
+            --hidden-import hachoir \
+            --hidden-import olefile \
+            --hidden-import openpyxl \
+            --hidden-import docx \
+            --hidden-import pptx \
+            --hidden-import pypdf
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build React frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Copy frontend dist into electron
+        run: cp -r frontend/dist electron/frontend
+
+      - name: Sync electron/package.json version from python/config.py
+        run: |
+          cd electron
+          npm version ${{ needs.get-version.outputs.version }} --no-git-tag-version --allow-same-version
+
+      - name: Configure RPM macros (prevent Build ID conflicts on Fedora/RHEL)
+        run: echo '%_build_id_links none' >> ~/.rpmmacros
+
+      - name: Package with Electron Forge
+        run: |
+          cd electron
+          npm ci --include=dev
+          npx electron-forge make
+
+      - name: Create Linux tar.gz (portable archive)
+        run: |
+          VERSION=${{ needs.get-version.outputs.version }}
+          APP_DIR=$(find electron/out -maxdepth 1 -type d -name "MetaLens-linux-*" | head -1)
+          if [ -n "$APP_DIR" ]; then
+            tar -czf "electron/out/make/MetaLens-${VERSION}-Linux.tar.gz" \
+              -C "$(dirname "$APP_DIR")" "$(basename "$APP_DIR")"
+            echo "Created MetaLens-${VERSION}-Linux.tar.gz"
+          else
+            echo "Warning: no MetaLens-linux-* directory found, skipping tar.gz"
+          fi
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-packages-test
+          path: |
+            electron/out/make/**/*.deb
+            electron/out/make/**/*.rpm
+            electron/out/make/**/*.tar.gz
+          if-no-files-found: error
