@@ -30,7 +30,7 @@ hachoir==3.3.0
 xattr==1.1.0; sys_platform != "win32"
 
 # Windows file attributes
-pywin32==310; sys_platform == "win32"
+pywin32==312; sys_platform == "win32"
 
 # Testing
 pytest==9.1.0
