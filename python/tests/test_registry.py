@@ -1,8 +1,11 @@
+import importlib
 from pathlib import Path
 from core.registry import HandlerRegistry
 from core.base_handler import BaseMetadataHandler
 from core.models import MetadataField, MetadataRecord
-import core.handlers  # noqa: F401 — registers all handlers
+
+# Trigger handler registration as an explicit side effect.
+importlib.import_module("core.handlers")
 
 
 class MockHandler(BaseMetadataHandler):

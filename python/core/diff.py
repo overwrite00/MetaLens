@@ -1,7 +1,7 @@
 from __future__ import annotations
 import hashlib
 
-from core.models import DiffResult, MetadataField, MetadataRecord
+from core.models import DiffResult, MetadataRecord
 
 
 def compute_diff(record_a: MetadataRecord, record_b: MetadataRecord) -> DiffResult:
