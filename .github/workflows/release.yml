@@ -19,6 +19,8 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   get-version:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       version: ${{ steps.ver.outputs.version }}
     steps:
@@ -35,6 +37,8 @@ jobs:
   build-windows:
     needs: get-version
     runs-on: windows-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v6
 
@@ -99,6 +103,8 @@ jobs:
   build-linux:
     needs: get-version
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v6
 

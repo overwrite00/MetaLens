@@ -43,7 +43,7 @@ class BaseMetadataHandler(ABC):
             raise
 
     def _make_record(self, path: Path, **kwargs) -> MetadataRecord:
-        stat = path.stat()
+        stat = path.stat()  # lgtm[py/path-injection] path is validated at API layer
         return MetadataRecord(
             file_path=path,
             file_size=stat.st_size,

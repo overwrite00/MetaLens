@@ -12,7 +12,8 @@ from core.registry import HandlerRegistry
 # ──────────────────────── Helpers ────────────────────────────────────────────
 
 def make_temp_copy(src: Path) -> Path:
-    tmp = Path(tempfile.mktemp(suffix=src.suffix))
+    with tempfile.NamedTemporaryFile(suffix=src.suffix, delete=False) as f:
+        tmp = Path(f.name)
     shutil.copy2(src, tmp)
     return tmp
 
