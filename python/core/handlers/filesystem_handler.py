@@ -21,7 +21,7 @@ class FilesystemHandler(BaseMetadataHandler):
         fields: list[MetadataField] = []
         errors: list[str] = []
         try:
-            st = path.stat()  # lgtm[py/path-injection] path is validated at API layer
+            st = path.stat()
             fields += [
                 MetadataField("fs:size", "File Size (bytes)", st.st_size,
                               editable=False, deletable=False, field_type="int", source="filesystem"),

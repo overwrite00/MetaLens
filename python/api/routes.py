@@ -15,19 +15,6 @@ from core.diff import compute_diff
 router = APIRouter()
 
 
-def _validate_path_exists(path: str, must_be_file: bool = False, must_be_dir: bool = False) -> Path:
-    """Validate that a path exists and is accessible. Prevents path injection by verifying actual filesystem state."""
-    try:
-        fpath = Path(path).resolve()
-        if must_be_file and not fpath.is_file():
-            raise HTTPException(status_code=404, detail=f"File not found: {path}")
-        if must_be_dir and not fpath.is_dir():
-            raise HTTPException(status_code=400, detail=f"Not a directory: {path}")
-        return fpath
-    except (OSError, ValueError) as e:
-        raise HTTPException(status_code=400, detail=f"Invalid path: {path}") from e
-
-
 # ──────────────────────────────── /health ────────────────────────────────────
 
 @router.get("/health")
@@ -44,7 +31,9 @@ def hash_file(
     path: str = Query(..., description="Absolute file path"),
     algorithms: str = Query("md5,sha1,sha256,sha512,blake2b", description="Comma-separated list of algorithms"),
 ):
-    fpath = _validate_path_exists(path, must_be_file=True)
+    fpath = Path(path)
+    if not fpath.is_file():
+        raise HTTPException(status_code=404, detail=f"File not found: {path}")
 
     requested = {a.strip().lower() for a in algorithms.split(",") if a.strip()}
     unknown = requested - _SUPPORTED_ALGORITHMS
@@ -72,7 +61,9 @@ def hash_file(
 
 @router.get("/list")
 def list_directory(path: str = Query(..., description="Absolute directory path")):
-    dirpath = _validate_path_exists(path, must_be_dir=True)
+    dirpath = Path(path)
+    if not dirpath.is_dir():
+        raise HTTPException(status_code=400, detail=f"Not a directory: {path}")
 
     items = []
     try:
@@ -108,7 +99,9 @@ def list_directory(path: str = Query(..., description="Absolute directory path")
 
 @router.get("/read")
 def read_metadata(path: str = Query(..., description="Absolute file path")):
-    fpath = _validate_path_exists(path, must_be_file=True)
+    fpath = Path(path)
+    if not fpath.is_file():
+        raise HTTPException(status_code=404, detail=f"File not found: {path}")
     try:
         handler = HandlerRegistry.get(fpath)
     except ValueError:
@@ -136,7 +129,9 @@ class WriteRequest(BaseModel):
 
 @router.post("/write")
 def write_metadata(req: WriteRequest):
-    fpath = _validate_path_exists(req.path, must_be_file=True)
+    fpath = Path(req.path)
+    if not fpath.is_file():
+        raise HTTPException(status_code=404, detail=f"File not found: {req.path}")
 
     try:
         handler = HandlerRegistry.get(fpath)
@@ -172,7 +167,9 @@ class DeleteRequest(BaseModel):
 
 @router.post("/delete")
 def delete_metadata(req: DeleteRequest):
-    fpath = _validate_path_exists(req.path, must_be_file=True)
+    fpath = Path(req.path)
+    if not fpath.is_file():
+        raise HTTPException(status_code=404, detail=f"File not found: {req.path}")
 
     try:
         handler = HandlerRegistry.get(fpath)
@@ -197,8 +194,10 @@ def diff_files(
     a: str = Query(..., description="Absolute path to file A"),
     b: str = Query(..., description="Absolute path to file B"),
 ):
-    path_a = _validate_path_exists(a, must_be_file=True)
-    path_b = _validate_path_exists(b, must_be_file=True)
+    path_a, path_b = Path(a), Path(b)
+    for p in (path_a, path_b):
+        if not p.is_file():
+            raise HTTPException(status_code=404, detail=f"File not found: {p}")
 
     def _read(p: Path):
         try:
