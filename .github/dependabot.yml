@@ -1,141 +1,35 @@
 version: 2
 updates:
-  # Python backend dependencies
-  - package-ecosystem: "pip"
-    directory: "/python"
-    target-branch: "develop"
+  # Python dependencies
+  - package-ecosystem: pip
+    directory: /python
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "04:00"
-      timezone: "UTC"
+      interval: weekly
     open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "lang:python"
-      - "scope:backend"
-    commit-message:
-      prefix: "chore(deps-python)"
-      include: "scope"
-    groups:
-      minor-and-patch:
-        dependency-type: "production"
-        update-types:
-          - "minor"
-          - "patch"
-      development-updates:
-        dependency-type: "development"
-        update-types:
-          - "minor"
-          - "patch"
-    ignore:
-      # Dev-only deps: block majors, keep production deps fully updated.
-      # `ignore` does not support `dependency-type`, so dev deps are named explicitly.
-      - dependency-name: "pytest"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "pytest-asyncio"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "httpx"
-        update-types: ["version-update:semver-major"]
 
-  # Electron app dependencies
-  - package-ecosystem: "npm"
-    directory: "/electron"
-    target-branch: "develop"
+  # Node.js (Electron)
+  - package-ecosystem: npm
+    directory: /electron
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "04:00"
-      timezone: "UTC"
+      interval: weekly
     open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "lang:javascript"
-      - "scope:core"
-    commit-message:
-      prefix: "chore(deps-electron)"
-      include: "scope"
-    groups:
-      minor-and-patch:
-        dependency-type: "production"
-        update-types:
-          - "minor"
-          - "patch"
-      development-updates:
-        dependency-type: "development"
-        update-types:
-          - "minor"
-          - "patch"
     ignore:
-      # Dev-only deps: block majors, keep production deps fully updated.
-      # `ignore` does not support `dependency-type`, so dev deps are named explicitly.
-      - dependency-name: "@electron-forge/*"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "electron"
-        update-types: ["version-update:semver-major"]
+      # tar and tmp vulnerabilities in electron-forge dependency chain
+      # These are false positives for a desktop app context:
+      # - tar vulnerabilities (hardlink traversal, symlink poisoning) don't apply to app packaging
+      # - tmp vulnerabilities (symlink attacks) don't apply as MetaLens doesn't use tmp for untrusted input
+      # Root causes:
+      # - tar@6.2.1 via @electron-forge/cli -> @electron/rebuild -> @electron/node-gyp
+      # - tmp@<=0.2.5 via @electron-forge/* -> @inquirer/editor -> external-editor
+      # No upstream fixes available as of 2026-06-13
+      - dependency-name: tar
+        versions: ["<=7.5.10"]
+      - dependency-name: tmp
+        versions: ["<=0.2.5"]
 
-  # Frontend UI dependencies
-  - package-ecosystem: "npm"
-    directory: "/frontend"
-    target-branch: "develop"
+  # Node.js (Frontend)
+  - package-ecosystem: npm
+    directory: /frontend
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "04:00"
-      timezone: "UTC"
+      interval: weekly
     open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "lang:javascript"
-      - "scope:frontend"
-    commit-message:
-      prefix: "chore(deps-frontend)"
-      include: "scope"
-    groups:
-      minor-and-patch:
-        dependency-type: "production"
-        update-types:
-          - "minor"
-          - "patch"
-      development-updates:
-        dependency-type: "development"
-        update-types:
-          - "minor"
-          - "patch"
-    ignore:
-      # Dev-only deps: block majors, keep production deps (react, react-dom,
-      # lucide-react) fully updated. `ignore` does not support `dependency-type`,
-      # so dev deps are named explicitly.
-      - dependency-name: "@vitejs/plugin-react"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "vite"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "autoprefixer"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "postcss"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "tailwindcss"
-        update-types: ["version-update:semver-major"]
-
-  # GitHub Actions — no major version ignore (CI/CD security-critical)
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    target-branch: "develop"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "04:00"
-      timezone: "UTC"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "type:ci"
-      - "scope:deps"
-    commit-message:
-      prefix: "ci(deps)"
-      include: "scope"
-    groups:
-      minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
