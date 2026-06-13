@@ -15,6 +15,29 @@ Format: [Semantic Versioning](https://semver.org/) — `MAJOR.MINOR.PATCH`
 
 ---
 
+## [0.1.2] — 2026-06-13
+
+### Fixed
+- **Code Quality**: Resolved all 30 CodeQL static analysis alerts
+  - 13× unused imports removed from handlers, API routes, and tests
+  - 7× empty except blocks properly handled with pass statements
+  - 3× ineffectual statements removed from abstract method definitions
+  - 2× unused variables removed (PathT global, captured_temp_path local)
+  - 1× overly permissive file permissions fixed (CWE-732) in test suite
+  - 3× JavaScript unused local variables cleaned (useCallback imports, SortIcon component)
+
+### Testing
+- All 47 tests passing, 1 skipped
+- Zero regressions from code cleanup
+- CodeQL analysis: 0 remaining security/quality alerts
+
+### Quality Assurance
+- Verified with Opus agent: comprehensive code review
+- No syntax errors, type hint completeness verified
+- Pydantic models functional, all imports validated
+
+---
+
 ## [0.1.1] — 2026-06-13
 
 ### Security
