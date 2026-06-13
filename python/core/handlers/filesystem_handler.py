@@ -45,7 +45,7 @@ class FilesystemHandler(BaseMetadataHandler):
                                                 grp.getgrgid(st.st_gid).gr_name,
                                                 editable=False, deletable=False, source="filesystem"))
                 except Exception:
-                    continue
+                    pass
                 # Extended attributes (Linux/macOS)
                 try:
                     import xattr as xattr_lib
@@ -69,7 +69,7 @@ class FilesystemHandler(BaseMetadataHandler):
                         fields.append(MetadataField("fs:win_attrs", "Windows Attributes", attrs,
                                                     editable=False, deletable=False, source="filesystem"))
                 except Exception:
-                    continue
+                    pass
         except Exception as e:
             errors.append(f"Filesystem read error: {e}")
 

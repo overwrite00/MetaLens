@@ -1,6 +1,7 @@
 from __future__ import annotations
 import hashlib
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -86,7 +87,7 @@ def list_directory(path: str = Query(..., description="Absolute directory path")
             try:
                 handler_name = HandlerRegistry.get(entry).NAME
             except ValueError:
-                continue
+                pass
             items.append({
                 "name": entry.name,
                 "path": str(entry),
