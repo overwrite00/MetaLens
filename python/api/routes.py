@@ -15,6 +15,33 @@ from core.diff import compute_diff
 router = APIRouter()
 
 
+def _is_path_safe(path_str: str) -> Path:
+    """
+    Validate and normalize user-provided file path. Prevents directory traversal attacks.
+    Restricts access to home directory and common user directories.
+    Raises HTTPException if path is unsafe.
+    """
+    try:
+        path = Path(path_str).resolve()
+    except (OSError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=f"Invalid path: {path_str}") from e
+
+    home = Path.home()
+    allowed_bases = [home]
+
+    for base in allowed_bases:
+        try:
+            path.relative_to(base)
+            return path
+        except ValueError:
+            pass
+
+    raise HTTPException(
+        status_code=403,
+        detail=f"Access denied: path must be within home directory"
+    )
+
+
 # ──────────────────────────────── /health ────────────────────────────────────
 
 @router.get("/health")
@@ -31,7 +58,7 @@ def hash_file(
     path: str = Query(..., description="Absolute file path"),
     algorithms: str = Query("md5,sha1,sha256,sha512,blake2b", description="Comma-separated list of algorithms"),
 ):
-    fpath = Path(path)
+    fpath = _is_path_safe(path)
     if not fpath.is_file():
         raise HTTPException(status_code=404, detail=f"File not found: {path}")
 
@@ -61,7 +88,7 @@ def hash_file(
 
 @router.get("/list")
 def list_directory(path: str = Query(..., description="Absolute directory path")):
-    dirpath = Path(path)
+    dirpath = _is_path_safe(path)
     if not dirpath.is_dir():
         raise HTTPException(status_code=400, detail=f"Not a directory: {path}")
 
@@ -99,7 +126,7 @@ def list_directory(path: str = Query(..., description="Absolute directory path")
 
 @router.get("/read")
 def read_metadata(path: str = Query(..., description="Absolute file path")):
-    fpath = Path(path)
+    fpath = _is_path_safe(path)
     if not fpath.is_file():
         raise HTTPException(status_code=404, detail=f"File not found: {path}")
     try:
@@ -129,7 +156,7 @@ class WriteRequest(BaseModel):
 
 @router.post("/write")
 def write_metadata(req: WriteRequest):
-    fpath = Path(req.path)
+    fpath = _is_path_safe(req.path)
     if not fpath.is_file():
         raise HTTPException(status_code=404, detail=f"File not found: {req.path}")
 
@@ -167,7 +194,7 @@ class DeleteRequest(BaseModel):
 
 @router.post("/delete")
 def delete_metadata(req: DeleteRequest):
-    fpath = Path(req.path)
+    fpath = _is_path_safe(req.path)
     if not fpath.is_file():
         raise HTTPException(status_code=404, detail=f"File not found: {req.path}")
 
@@ -194,7 +221,8 @@ def diff_files(
     a: str = Query(..., description="Absolute path to file A"),
     b: str = Query(..., description="Absolute path to file B"),
 ):
-    path_a, path_b = Path(a), Path(b)
+    path_a = _is_path_safe(a)
+    path_b = _is_path_safe(b)
     for p in (path_a, path_b):
         if not p.is_file():
             raise HTTPException(status_code=404, detail=f"File not found: {p}")
