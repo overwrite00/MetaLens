@@ -1,6 +1,3 @@
-# lgtm disable=py/path-injection
-# All paths in this file are validated by validate_file_path() or validate_directory_path()
-# before filesystem operations, satisfying CodeQL security requirements.
 from __future__ import annotations
 import hashlib
 import os
