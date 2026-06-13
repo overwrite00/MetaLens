@@ -33,6 +33,6 @@ xattr==1.1.0; sys_platform != "win32"
 pywin32==310; sys_platform == "win32"
 
 # Testing
-pytest==9.0.3
+pytest==9.1.0
 pytest-asyncio==1.4.0
 httpx==0.28.1
