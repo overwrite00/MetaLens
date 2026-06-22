@@ -15,6 +15,24 @@ Format: [Semantic Versioning](https://semver.org/) — `MAJOR.MINOR.PATCH`
 
 ---
 
+## [0.1.4] — 2026-06-22
+
+### Security
+- **Critical**: Updated undici from 7.27.2 to 7.28.0 — **7 security vulnerabilities resolved**
+  - **3× HIGH**: WebSocket DoS (CVE-2026-12151), TLS bypass in SOCKS5 (CVE-2026-9697), Cross-origin routing (CVE-2026-6734)
+  - **2× MEDIUM**: Cache bypass (CVE-2026-9678), HTTP header injection (CVE-2026-9679)
+  - **2× LOW**: SameSite downgrade (CVE-2026-11525), HTTP response poisoning (CVE-2026-6733)
+  - Transitive dependency in @electron-forge
+  - Fixes WebSocket fragment exhaustion, SOCKS5 proxy pool reuse, TLS certificate validation
+
+### Quality
+- All tests passing: 47 passed, 1 skipped
+- Electron build: verified with undici 7.28.0
+- Frontend build: confirmed compatible
+- No regressions
+
+---
+
 ## [0.1.3] — 2026-06-22
 
 ### Fixed
