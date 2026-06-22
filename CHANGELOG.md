@@ -15,6 +15,32 @@ Format: [Semantic Versioning](https://semver.org/) — `MAJOR.MINOR.PATCH`
 
 ---
 
+## [0.1.3] — 2026-06-22
+
+### Fixed
+- **Tailwind CSS v4 Breaking Change**: Updated PostCSS configuration to use `@tailwindcss/postcss` package
+  - Installed `@tailwindcss/postcss` as separate dev dependency
+  - Updated postcss.config.js plugin configuration
+  - CSS bundle size improved (6.83 kB vs 15.33 kB)
+
+### Dependencies
+- electron: 42.4.0 → 42.4.1 (DevTools fixes, safeStorage async fix)
+- fastapi: 0.136.3 → 0.137.2 (bug fixes)
+- lucide-react: 1.18.0 → 1.21.0 (icon updates)
+- pypdf: 6.13.2 → 6.13.3 (security: MAX_DECLARED_STREAM_LENGTH fix, performance improvements)
+- react-dom: 19.2.5 → 19.2.7
+- tailwindcss: 3.4.19 → 4.3.1
+- pytest: 9.0.3 → 9.1.0
+- pywin32: 310 → 312
+- xattr: 1.1.0 → 1.3.0
+
+### Quality
+- All tests passing: 47 passed, 1 skipped
+- GitHub Actions workflow checks: all passing
+- No regressions
+
+---
+
 ## [0.1.2] — 2026-06-13
 
 ### Fixed
