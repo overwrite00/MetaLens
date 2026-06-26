@@ -15,6 +15,39 @@ Format: [Semantic Versioning](https://semver.org/) — `MAJOR.MINOR.PATCH`
 
 ---
 
+## [0.1.5] — 2026-06-26
+
+### Security
+- **pypdf**: Updated 6.13.3 → 6.14.2 — **critical security fixes**
+  - Prevent infinite loops for incomplete ASCII85 and ASCIIHex inline images (CVE-2026-53655)
+  - Detect end of stream during inline image end marker detection
+  - Limit requested image size to prevent memory exhaustion
+  - Speed up recovery when reading broken cross-reference tables
+
+### Dependencies
+- **Build tools**:
+  - electron: 42.4.1 → 42.5.0 (Chromium 148.0.7778.271, Node.js v24.17.0, Wayland window maximize fix)
+  - vite: 8.0.16 → 8.1.0 (caseSensitive glob option, chunk importmap, Rolldown 1.1.2)
+  - @vitejs/plugin-react: 6.0.2 → 6.0.3 (non-root base path fix)
+  - autoprefixer: 10.5.0 → 10.5.2 (webkit-fill-available priority fix)
+- **Backend**:
+  - fastapi: 0.137.2 → 0.138.1 (app.frontend() SPA serving support)
+  - mutagen: 1.47.0 → 1.48.1 (ID3 improvements, Python 3.7-3.9 drop)
+- **Testing**:
+  - pytest: 9.1.0 → 9.1.1 (regression fixes for parametrize and conftest loading)
+
+### Quality
+- All dependency updates verified with CI and runtime testing
+- Frontend build size stable (231.65 kB JS, 6.83 kB CSS)
+- FastAPI sidecar running on Python 3.11–3.13 without deprecation warnings
+- Electron 42.5.0 binary verified functional with Python sidecar integration
+
+### Notes
+- Dismissed Dependabot alert #46 (node-tar): transitive build-time dependency from @electron-forge, no runtime exposure; fix unavailable upstream
+- No breaking changes to application API or UI
+
+---
+
 ## [0.1.4] — 2026-06-22
 
 ### Security
