@@ -10,7 +10,7 @@ Pillow==12.2.0
 piexif==1.1.3
 
 # Audio / Video
-mutagen==1.47.0
+mutagen==1.48.1
 
 # PDF
 pypdf==6.14.2
