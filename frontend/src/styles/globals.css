@@ -1,6 +1,20 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --color-cyber-bg:       #0a0e17;
+  --color-cyber-panel:    #0f1520;
+  --color-cyber-tertiary: #1a2234;
+  --color-cyber-border:   #1e3a5f;
+  --color-cyber-cyan:     #00d4ff;
+  --color-cyber-blue:     #0066ff;
+  --color-cyber-purple:   #7c3aed;
+  --color-cyber-text:     #e2e8f0;
+  --color-cyber-muted:    #64748b;
+  --color-cyber-dim:      #334155;
+  --color-cyber-success:  #00ff88;
+  --color-cyber-warning:  #ffaa00;
+  --color-cyber-danger:   #ff4444;
+}
 
 :root {
   --bg-primary:    #0a0e17;

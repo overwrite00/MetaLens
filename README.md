@@ -1,6 +1,6 @@
 # MetaLens
 
-![Version](https://img.shields.io/badge/version-0.1.2-cyan)
+![Version](https://img.shields.io/badge/version-0.1.5-cyan)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey)
 
