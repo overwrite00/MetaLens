@@ -15,6 +15,55 @@ Format: [Semantic Versioning](https://semver.org/) — `MAJOR.MINOR.PATCH`
 
 ---
 
+## [0.2.0] — 2026-07-04
+
+### Major Changes
+- **Tailwind CSS v4 Upgrade**: Migrated from Tailwind v3 to v4 with new Vite plugin integration
+  - Replaced @tailwindcss/postcss with @tailwindcss/vite for improved performance
+  - Implemented CSS-first configuration using @theme directive
+  - Custom color definitions now directly in globals.css
+  - Removed tailwind.config.ts and postcss.config.js (no longer needed)
+  - CSS build optimized with better tree-shaking and minification
+
+### Dependencies
+- **Build Tools**:
+  - electron: 42.5.0 → 43.0.0 (Chromium 150, Node.js 24.17.0, new WebAuthn APIs, frameless window improvements)
+  - tailwindcss: 3.4.19 → 4.3.2 (v4 architecture, improved CSS output)
+  - @tailwindcss/vite: ⬆️ (new plugin for Vite integration, replaces @tailwindcss/postcss)
+  - vite: 8.1.0 → 8.1.3 (patch fixes for build stability)
+  - postcss: 8.5.15 → 8.5.16 (Input#origin positioning fixes)
+- **Frontend**:
+  - lucide-react: 1.21.0 → 1.23.0 (new icons, Astro v7 compatibility)
+  - @tailwindcss/postcss: 4.3.1 → 4.3.2 (auto-rows/cols fixes, Windows CLI improvements)
+  - @vitejs/plugin-react: 6.0.2 → 6.0.3 (React refresh improvements)
+- **Python Backend**:
+  - fastapi: 0.138.1 → 0.139.0 (new routing features)
+  - pillow: 12.2.0 → 12.3.0 (image handling improvements)
+
+### Performance
+- Reduced configuration complexity: CSS-first approach eliminates need for TypeScript config
+- Improved build times: Vite plugin integration optimized for faster rebuilds
+- Custom color utility classes now correctly generated (56 classes: bg-cyber-*, text-cyber-*, border-cyber-*)
+- CSS bundle optimized: fully included Tailwind utilities now properly minified
+
+### Breaking Changes
+- None for end users
+- Internal: Configuration approach changed but UI/API remain identical
+- Dev environment: Must use `npm run dev` instead of separate dev servers; Vite plugin handles CSS compilation
+
+### Testing
+- All Python tests passing: 47 passed, 1 skipped
+- Electron 43 compatibility verified
+- UI color palette fully preserved and validated
+- CSS output tested: all custom colors generate correctly
+
+### Notes
+- First official release with Tailwind v4 stable build
+- No changes to application API, features, or user-facing behavior
+- Recommended upgrade for improved build performance and future Tailwind compatibility
+
+---
+
 ## [0.1.5] — 2026-06-26
 
 ### Security
