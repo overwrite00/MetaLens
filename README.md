@@ -1,6 +1,7 @@
 # 🔍 MetaLens
 
-![Version](https://img.shields.io/badge/version-0.2.0-cyan)
+[![Stable](https://img.shields.io/github/v/release/overwrite00/MetaLens?label=stable&color=00d4ff&logo=github)](../../releases/latest)
+[![Beta](https://img.shields.io/github/v/release/overwrite00/MetaLens?include_prereleases&label=beta&color=ffaa00&logo=github)](../../releases)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey)
 
