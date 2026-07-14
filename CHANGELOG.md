@@ -23,9 +23,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - uvicorn: 0.49.0 → 0.51.0 (near-zero-downtime worker reload on SIGHUP, removed colorama from standard extra)
 - lucide-react: 1.23.0 → 1.24.0 (new icons, several upstream icon fixes)
 
+### CI/CD
+- **Beta/stable release pipeline**: `develop` pushes now build and publish a prerelease
+  (`vX.Y.Z-beta.N`); `main` pushes promote the matching beta's assets to a stable release
+  without rebuilding
+- Beta version counter is now scoped per release version instead of the workflow's global
+  run number, so the first beta for a new version starts at `beta.1`
+- Windows installer renamed from the misleading `MetaLens Setup.exe` (implies a traditional
+  installer) to `MetaLens-<version>-win-x64.exe`
+- Fixed beta-suffix stripping on stable promotion to handle all 4 package naming conventions
+  (`.exe`/`.tar.gz` use `-beta.N`, `.rpm` uses `betaN` with no separator, `.deb` uses `.beta.N`)
+- Added `workflow_dispatch` trigger for manual pipeline runs
+
 ### Quality
 - All tests passing: 47 passed, 1 skipped
 - Frontend build and Electron startup verified with updated dependencies
+- Beta/stable pipeline verified end-to-end: v0.2.1-beta.1, v0.2.1-beta.2, and the resulting
+  v0.2.1 stable release all published with correct asset naming
 - No regressions
 
 ---
