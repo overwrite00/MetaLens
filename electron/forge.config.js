@@ -32,6 +32,10 @@ module.exports = {
       config: {
         name: 'MetaLens',
         setupIcon: path.join(__dirname, '..', 'frontend', 'public', 'icon.ico'),
+        // Squirrel names the generated file "<name> Setup.exe" by default, which
+        // reads as a traditional installer — it's actually a self-contained
+        // Squirrel bootstrapper, so give it a neutral name instead.
+        setupExe: `MetaLens-${version}-win-x64.exe`,
       },
     },
     { name: '@electron-forge/maker-zip', platforms: ['darwin'] },
