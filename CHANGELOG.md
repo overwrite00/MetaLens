@@ -1,17 +1,17 @@
 # Changelog
 
 All notable changes to MetaLens are documented in this file.
-
-Format: [Semantic Versioning](https://semver.org/) — `MAJOR.MINOR.PATCH`
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — `MAJOR.MINOR.PATCH`.
 
 ---
 
-## [Unreleased]
+## [Unreleased] — Next Release
 
-### Planned
-- Export metadata as CSV/JSON
-- Batch edit on multiple selected files
-- Search/filter bar in file list
+### Roadmap
+
+- [ ] **CSV/JSON Export** — Export metadata for the current file or folder
+- [ ] **Batch Edit** — Apply a field change to multiple selected files at once
+- [ ] **Search/Filter Bar** — Filter the file list by name or extension
 
 ---
 
@@ -194,9 +194,9 @@ Format: [Semantic Versioning](https://semver.org/) — `MAJOR.MINOR.PATCH`
 
 ### Documentation
 - Added comprehensive security documentation (2000+ lines)
-  - `SECURITY_ANALYSIS_Q_AND_A.md`: Deep threat model analysis
   - `python/SECURITY.md`: Security design and implementation guide
   - `python/core/PATH_SECURITY_USAGE.md`: API reference for developers
+  - *(internal threat-model notes were later removed from the repo as temporary development files — see [0.1.2])*
 
 ---
 
@@ -222,3 +222,7 @@ Format: [Semantic Versioning](https://semver.org/) — `MAJOR.MINOR.PATCH`
 - About dialog with version from `/health`
 - GitHub Actions CI: automated Windows (.exe) + Linux (.deb/.rpm) builds on push to `main`
 - MIT License — © 2026 Graziano Mariella
+
+---
+
+*← [Back to README](./README.md)*
