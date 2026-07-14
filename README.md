@@ -81,7 +81,7 @@ File (image / audio / video / document / anything)
 
 ## 🔧 Version
 
-**v0.2.0** — Tailwind CSS v4 upgrade with the new Vite plugin, CSS-first `@theme` configuration, and dependency updates (Electron 43, FastAPI 0.139, Pillow 12.3). No changes to application behavior or the API.
+**v0.2.1** — Routine dependency updates (Electron 43.1, Vite 8.1.4, uvicorn 0.51, lucide-react 1.24). No changes to application behavior or the API.
 
 📖 **See full version history** → [CHANGELOG.md](./CHANGELOG.md)
 

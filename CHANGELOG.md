@@ -15,6 +15,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ---
 
+## [0.2.1] — 2026-07-14
+
+### Dependencies
+- electron: 43.0.0 → 43.1.0 (fixed crash on replacing an open application menu, Chromium 150.0.7871.47, Node.js 24.18.0)
+- vite: 8.1.3 → 8.1.4 (oxc minifier preference for legacy builds, StackBlitz build workaround, SSR stacktrace alignment)
+- uvicorn: 0.49.0 → 0.51.0 (near-zero-downtime worker reload on SIGHUP, removed colorama from standard extra)
+- lucide-react: 1.23.0 → 1.24.0 (new icons, several upstream icon fixes)
+
+### Quality
+- All tests passing: 47 passed, 1 skipped
+- Frontend build and Electron startup verified with updated dependencies
+- No regressions
+
+---
+
 ## [0.2.0] — 2026-07-04
 
 ### Major Changes

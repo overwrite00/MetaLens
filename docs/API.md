@@ -26,7 +26,7 @@ Health check + version, used by the About dialog and by Electron to know the sid
 
 **Response**
 ```json
-{ "status": "ok", "version": "0.2.0", "app": "MetaLens" }
+{ "status": "ok", "version": "0.2.1", "app": "MetaLens" }
 ```
 
 ---

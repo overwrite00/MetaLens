@@ -8,6 +8,10 @@ const iconExists = ['.ico', '.icns', '.png'].some(ext => fs.existsSync(iconPath 
 // Read version from package.json — synced by the CI workflow from python/config.py
 const { version } = require('./package.json')
 
+// RPM's Version field forbids "-" (used for beta tags like 0.2.1-beta.5),
+// so the rpm maker gets a sanitized copy while every other maker keeps the real semver.
+const rpmSafeVersion = version.replace(/-/g, '')
+
 module.exports = {
   packagerConfig: {
     name: 'MetaLens',
@@ -57,6 +61,7 @@ module.exports = {
           license:      'MIT',
           icon:         path.join(__dirname, '..', 'frontend', 'public', 'icon.png'),
           categories:   ['Utility', 'FileManager'],
+          version:      rpmSafeVersion,
         },
       },
     },
