@@ -128,9 +128,16 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           BASE=$(grep -oP 'VERSION\s*=\s*"\K[^"]+' python/config.py)
-          BETA="${BASE}-beta.${{ github.run_number }}"
+          # Count existing beta releases for this exact base version and increment —
+          # keeps beta.N scoped to the version instead of the workflow's global run number.
+          LAST=$(gh release list --repo "${{ github.repository }}" --limit 200 \
+            | grep -oP "v${BASE}-beta\.\K[0-9]+" | sort -n | tail -1)
+          NEXT=$(( ${LAST:-0} + 1 ))
+          BETA="${BASE}-beta.${NEXT}"
           echo "base_version=$BASE" >> "$GITHUB_OUTPUT"
           echo "beta_version=$BETA" >> "$GITHUB_OUTPUT"
           echo "Building MetaLens beta v$BETA"
