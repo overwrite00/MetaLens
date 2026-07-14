@@ -372,8 +372,11 @@ jobs:
       - name: Strip beta suffix from filenames
         run: |
           cd promoted
+          # Each maker encodes the beta suffix differently: "-beta.N" (exe/tar.gz),
+          # "beta.N" with no separator (rpm, dash stripped for Version field rules),
+          # ".beta.N" (deb, dot-separated per Debian version conventions).
           for f in *; do
-            new=$(echo "$f" | sed -E 's/-beta\.[0-9]+//')
+            new=$(echo "$f" | sed -E 's/[-.]?beta\.?[0-9]+//')
             if [ "$f" != "$new" ]; then mv -- "$f" "$new"; fi
           done
           ls -la
