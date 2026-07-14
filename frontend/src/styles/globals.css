@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
 @theme {
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
   --color-cyber-bg:       #0a0e17;
   --color-cyber-panel:    #0f1520;
   --color-cyber-tertiary: #1a2234;
