@@ -9,9 +9,14 @@ on:
       - 'CHANGELOG.md'
       - 'LICENSE'
       - '*.md'
+  workflow_dispatch: {}
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
@@ -63,6 +68,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      ELECTRON_CACHE: ${{ github.workspace }}/.electron-cache
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -97,35 +104,53 @@ jobs:
           cd frontend
           npm ci
           npm run build
+      - name: Cache Electron download
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.ELECTRON_CACHE }}
+          key: electron-${{ runner.os }}-${{ hashFiles('electron/package-lock.json') }}
       - name: Test electron setup
         run: |
           cd electron
           npm ci --include=dev
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # RELEASE BUILD (main only) — Create and publish stable release
+  # BETA RELEASE (develop only) — Package and publish a prerelease build
   # ─────────────────────────────────────────────────────────────────────────────
-  get-version:
-    if: github.ref == 'refs/heads/main'
+  get-version-beta:
+    if: github.ref == 'refs/heads/develop'
+    needs: [test-python, test-frontend, test-electron]
     runs-on: ubuntu-latest
     permissions:
       contents: read
     outputs:
-      version: ${{ steps.ver.outputs.version }}
+      base_version: ${{ steps.ver.outputs.base_version }}
+      beta_version: ${{ steps.ver.outputs.beta_version }}
     steps:
       - uses: actions/checkout@v6
       - id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION=$(grep -oP 'VERSION\s*=\s*"\K[^"]+' python/config.py)
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Building MetaLens v$VERSION"
+          BASE=$(grep -oP 'VERSION\s*=\s*"\K[^"]+' python/config.py)
+          # Count existing beta releases for this exact base version and increment —
+          # keeps beta.N scoped to the version instead of the workflow's global run number.
+          LAST=$(gh release list --repo "${{ github.repository }}" --limit 200 \
+            | grep -oP "v${BASE}-beta\.\K[0-9]+" | sort -n | tail -1)
+          NEXT=$(( ${LAST:-0} + 1 ))
+          BETA="${BASE}-beta.${NEXT}"
+          echo "base_version=$BASE" >> "$GITHUB_OUTPUT"
+          echo "beta_version=$BETA" >> "$GITHUB_OUTPUT"
+          echo "Building MetaLens beta v$BETA"
 
-  build-windows:
-    if: github.ref == 'refs/heads/main'
-    needs: get-version
+  build-windows-beta:
+    if: github.ref == 'refs/heads/develop'
+    needs: get-version-beta
     runs-on: windows-latest
     permissions:
       contents: read
+    env:
+      ELECTRON_CACHE: ${{ github.workspace }}/.electron-cache
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -160,28 +185,35 @@ jobs:
           npm run build
       - name: Copy frontend dist into electron
         run: cp -r frontend/dist electron/frontend
-      - name: Sync electron version
+      - name: Sync electron version to beta
         run: |
           cd electron
-          npm version ${{ needs.get-version.outputs.version }} --no-git-tag-version --allow-same-version
+          npm version ${{ needs.get-version-beta.outputs.beta_version }} --no-git-tag-version --allow-same-version
+      - name: Cache Electron download
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.ELECTRON_CACHE }}
+          key: electron-${{ runner.os }}-${{ hashFiles('electron/package-lock.json') }}
       - name: Package with Electron Forge
         run: |
           cd electron
           npm ci --include=dev
           npx electron-forge make
-      - name: Upload Windows artifact
+      - name: Upload Windows beta artifact
         uses: actions/upload-artifact@v7
         with:
-          name: windows-installer
+          name: windows-installer-beta
           path: electron/out/make/**/*.exe
           if-no-files-found: error
 
-  build-linux:
-    if: github.ref == 'refs/heads/main'
-    needs: get-version
+  build-linux-beta:
+    if: github.ref == 'refs/heads/develop'
+    needs: get-version-beta
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      ELECTRON_CACHE: ${{ github.workspace }}/.electron-cache
     steps:
       - uses: actions/checkout@v6
       - name: Install system dependencies
@@ -217,12 +249,17 @@ jobs:
           npm run build
       - name: Copy frontend dist into electron
         run: cp -r frontend/dist electron/frontend
-      - name: Sync electron version
+      - name: Sync electron version to beta
         run: |
           cd electron
-          npm version ${{ needs.get-version.outputs.version }} --no-git-tag-version --allow-same-version
+          npm version ${{ needs.get-version-beta.outputs.beta_version }} --no-git-tag-version --allow-same-version
       - name: Configure RPM macros
         run: echo '%_build_id_links none' >> ~/.rpmmacros
+      - name: Cache Electron download
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.ELECTRON_CACHE }}
+          key: electron-${{ runner.os }}-${{ hashFiles('electron/package-lock.json') }}
       - name: Package with Electron Forge
         run: |
           cd electron
@@ -230,7 +267,7 @@ jobs:
           npx electron-forge make
       - name: Create Linux tar.gz
         run: |
-          VERSION=${{ needs.get-version.outputs.version }}
+          VERSION=${{ needs.get-version-beta.outputs.beta_version }}
           APP_DIR=$(find electron/out -maxdepth 1 -type d -name "MetaLens-linux-*" | head -1)
           if [ -n "$APP_DIR" ]; then
             tar -czf "electron/out/make/MetaLens-${VERSION}-Linux.tar.gz" \
@@ -239,19 +276,19 @@ jobs:
           else
             echo "Warning: no MetaLens-linux-* directory found, skipping tar.gz"
           fi
-      - name: Upload Linux artifacts
+      - name: Upload Linux beta artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: linux-packages
+          name: linux-packages-beta
           path: |
             electron/out/make/**/*.deb
             electron/out/make/**/*.rpm
             electron/out/make/**/*.tar.gz
           if-no-files-found: error
 
-  release:
-    if: github.ref == 'refs/heads/main'
-    needs: [get-version, build-windows, build-linux]
+  release-beta:
+    if: github.ref == 'refs/heads/develop'
+    needs: [get-version-beta, build-windows-beta, build-linux-beta]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -261,7 +298,89 @@ jobs:
           path: artifacts
       - name: List artifacts
         run: find artifacts -type f
-      - name: Create GitHub Release
+      - name: Create beta GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ needs.get-version-beta.outputs.beta_version }}
+          name: MetaLens v${{ needs.get-version-beta.outputs.beta_version }} (beta)
+          draft: false
+          prerelease: true
+          generate_release_notes: true
+          make_latest: false
+          files: |
+            artifacts/windows-installer-beta/**
+            artifacts/linux-packages-beta/**
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # STABLE RELEASE (main only) — Promote the matching beta build, no rebuild
+  # ─────────────────────────────────────────────────────────────────────────────
+  get-version:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: ver
+        run: |
+          VERSION=$(grep -oP 'VERSION\s*=\s*"\K[^"]+' python/config.py)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building MetaLens v$VERSION"
+
+  find-latest-beta:
+    if: github.ref == 'refs/heads/main'
+    needs: get-version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      beta_tag: ${{ steps.find.outputs.beta_tag }}
+    steps:
+      - id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.get-version.outputs.version }}
+        run: |
+          TAG=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName \
+            --jq '.[].tagName' \
+            | grep -E "^v${VERSION}-beta\.[0-9]+$" \
+            | sort -t. -k4 -n \
+            | tail -1)
+          if [ -z "$TAG" ]; then
+            echo "::error::Nessuna release beta trovata per v${VERSION}. Genera prima una beta da develop con la stessa VERSION in python/config.py."
+            exit 1
+          fi
+          echo "beta_tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Promuovendo $TAG a stable v${VERSION}"
+
+  promote-stable:
+    if: github.ref == 'refs/heads/main'
+    needs: [get-version, find-latest-beta]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download beta release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p promoted
+          gh release download "${{ needs.find-latest-beta.outputs.beta_tag }}" \
+            --repo "$GITHUB_REPOSITORY" --dir promoted
+      - name: Strip beta suffix from filenames
+        run: |
+          cd promoted
+          # Each maker encodes the beta suffix differently: "-beta.N" (exe/tar.gz),
+          # "beta.N" with no separator (rpm, dash stripped for Version field rules),
+          # ".beta.N" (deb, dot-separated per Debian version conventions).
+          for f in *; do
+            new=$(echo "$f" | sed -E 's/[-.]?beta\.?[0-9]+//')
+            if [ "$f" != "$new" ]; then mv -- "$f" "$new"; fi
+          done
+          ls -la
+      - name: Create stable GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ needs.get-version.outputs.version }}
@@ -270,6 +389,4 @@ jobs:
           prerelease: false
           generate_release_notes: true
           make_latest: true
-          files: |
-            artifacts/windows-installer/**
-            artifacts/linux-packages/**
+          files: promoted/*

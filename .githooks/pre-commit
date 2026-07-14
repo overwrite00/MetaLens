@@ -1,0 +1,5 @@
+#!/bin/sh
+# Auto-updates the "Last updated" footer in staged Markdown docs.
+# Enable once per clone with: git config core.hooksPath .githooks
+
+python "$(git rev-parse --show-toplevel)/scripts/update_docs_dates.py"
