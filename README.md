@@ -81,7 +81,7 @@ File (image / audio / video / document / anything)
 
 ## 🔧 Version
 
-**v0.2.1** — Routine dependency updates (Electron 43.1, Vite 8.1.4, uvicorn 0.51, lucide-react 1.24). No changes to application behavior or the API.
+**v0.2.2** — Fonts (Inter, JetBrains Mono) are now self-hosted via `@fontsource` instead of being loaded from Google Fonts at startup, making the "zero network calls" claim below actually true.
 
 📖 **See full version history** → [CHANGELOG.md](./CHANGELOG.md)
 

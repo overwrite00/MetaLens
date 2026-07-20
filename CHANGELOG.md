@@ -15,6 +15,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ---
 
+## [0.2.2] — 2026-07-14
+
+### Fixed
+- **Self-hosted fonts** — Inter and JetBrains Mono are now bundled locally via `@fontsource`
+  instead of being loaded from `fonts.googleapis.com`/`fonts.gstatic.com` at startup, removing
+  the unsolicited outbound connection to Google's servers when the app launches
+
+---
+
 ## [0.2.1] — 2026-07-14
 
 ### Dependencies

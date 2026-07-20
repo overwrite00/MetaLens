@@ -1,6 +1,6 @@
 {
   "name": "metalens-frontend",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.2.8",
+    "@fontsource/jetbrains-mono": "^5.2.8",
     "lucide-react": "^1.24.0",
     "react": "^19.1.0",
     "react-dom": "^19.2.7"
