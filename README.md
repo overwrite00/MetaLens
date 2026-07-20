@@ -81,7 +81,7 @@ File (image / audio / video / document / anything)
 
 ## 🔧 Version
 
-**v0.2.2** — Fonts (Inter, JetBrains Mono) are now self-hosted via `@fontsource` instead of being loaded from Google Fonts at startup, making the "zero network calls" claim below actually true.
+**v0.2.3** — Routine dependency updates (fastapi 0.139.2, tailwindcss 4.3.3, electron 43.1.1, vite 8.1.5). No changes to application behavior or the API.
 
 📖 **See full version history** → [CHANGELOG.md](./CHANGELOG.md)
 
@@ -234,5 +234,5 @@ Distributed with MIT License · [View License](LICENSE)
 
 ---
 
-*Last updated: 2026-07-14*
+*Last updated: 2026-07-20*
 *← [Requirements](docs/REQUIREMENTS.md) | [Docs →](docs/)*

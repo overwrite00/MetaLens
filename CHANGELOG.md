@@ -15,6 +15,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ---
 
+## [0.2.3] — 2026-07-20
+
+### Dependencies
+- fastapi: 0.139.0 → 0.139.2 (bug fixes)
+- tailwindcss: 4.3.2 → 4.3.3 (patch fixes)
+- @tailwindcss/vite: 4.3.2 → 4.3.3 (patch fixes)
+- electron: 43.1.0 → 43.1.1 (patch fixes, Chromium/Node.js security updates)
+- vite: 8.1.4 → 8.1.5 (patch fixes)
+
+### Quality
+- All tests passing: 47 passed, 1 skipped
+- Frontend build verified with updated dependencies
+- Electron 43.1.1 installation verified
+- No regressions
+
+---
+
 ## [0.2.2] — 2026-07-14
 
 ### Fixed
