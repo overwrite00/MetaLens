@@ -19,10 +19,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ### Fixed
 - **Squirrel install/update relaunch flash (Windows)** — the app now exits immediately when
-  launched by Squirrel for install/update/uninstall shortcut events (`electron-squirrel-startup`),
-  instead of booting the full GUI+splash and then being killed and relaunched by Squirrel once
-  it finishes — this was visible as the window and splash briefly appearing, closing, and
-  reopening a few seconds later.
+  launched by Squirrel for install/update/uninstall shortcut events, instead of booting the
+  full GUI+splash and then being killed and relaunched by Squirrel once it finishes — this was
+  visible as the window and splash briefly appearing, closing, and reopening a few seconds
+  later. Implemented inline rather than via the `electron-squirrel-startup` package: the
+  packager's `ignore: [/node_modules/]` rule strips `node_modules` from the packaged app
+  entirely, so the external module was missing at runtime and crashed the app on launch
+  (`Cannot find module 'electron-squirrel-startup'`) — caught and fixed before the 0.2.4 stable
+  promotion.
 
 ---
 
