@@ -81,7 +81,7 @@ File (image / audio / video / document / anything)
 
 ## 🔧 Version
 
-**v0.2.2** — Fonts (Inter, JetBrains Mono) are now self-hosted via `@fontsource` instead of being loaded from Google Fonts at startup, making the "zero network calls" claim below actually true.
+**v0.2.4** — Fixed a Windows-only bug where the app window and splash would flash, close, and reopen on install/update, caused by Squirrel relaunching the app after its own shortcut setup. No changes to application behavior or the API.
 
 📖 **See full version history** → [CHANGELOG.md](./CHANGELOG.md)
 
@@ -234,5 +234,5 @@ Distributed with MIT License · [View License](LICENSE)
 
 ---
 
-*Last updated: 2026-07-14*
+*Last updated: 2026-07-21*
 *← [Requirements](docs/REQUIREMENTS.md) | [Docs →](docs/)*

@@ -4,6 +4,29 @@ const { spawn } = require('child_process')
 const net = require('net')
 const fs = require('fs')
 
+// ─────────────────────── Windows/Squirrel install & update events ────────────
+// Squirrel (electron-forge maker-squirrel) launches the app with special flags
+// during install/uninstall/update to let it create/remove shortcuts. Without
+// this early exit, the app boots normally on those events and Squirrel then
+// relaunches it once setup is done — visible as GUI+splash flashing then
+// reopening. Inlined (rather than the electron-squirrel-startup package) so no
+// runtime node_modules need to be shipped in the packaged app.
+if (process.platform === 'win32') {
+  const squirrelCommand = process.argv[1]
+  const target = path.basename(process.execPath)
+  const runSquirrelUpdate = (args) => {
+    const updateExe = path.resolve(path.dirname(process.execPath), '..', 'Update.exe')
+    spawn(updateExe, args, { detached: true }).on('close', () => app.quit())
+  }
+  if (squirrelCommand === '--squirrel-install' || squirrelCommand === '--squirrel-updated') {
+    runSquirrelUpdate([`--createShortcut=${target}`])
+  } else if (squirrelCommand === '--squirrel-uninstall') {
+    runSquirrelUpdate([`--removeShortcut=${target}`])
+  } else if (squirrelCommand === '--squirrel-obsolete') {
+    app.quit()
+  }
+}
+
 // ─────────────────────── Privacy: disable Chromium network services ──────────
 // Must be called before app.whenReady() to take effect.
 app.commandLine.appendSwitch('disable-background-networking')
