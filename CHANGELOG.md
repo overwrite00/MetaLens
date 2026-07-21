@@ -15,6 +15,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ---
 
+## [0.2.4] — 2026-07-21
+
+### Fixed
+- **Squirrel install/update relaunch flash (Windows)** — the app now exits immediately when
+  launched by Squirrel for install/update/uninstall shortcut events (`electron-squirrel-startup`),
+  instead of booting the full GUI+splash and then being killed and relaunched by Squirrel once
+  it finishes — this was visible as the window and splash briefly appearing, closing, and
+  reopening a few seconds later.
+
+---
+
 ## [0.2.3] — 2026-07-20
 
 ### Dependencies
