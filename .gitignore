@@ -52,6 +52,7 @@ python/tests/samples/
 
 # Claude Code — file operativi locali
 CLAUDE.md
+AGENTS.md
 
 # Log files
 *.log
