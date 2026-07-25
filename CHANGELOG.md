@@ -15,6 +15,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ---
 
+## [0.2.8] — 2026-07-25
+
+### Fixed
+- Stable releases now rebuild Windows and Linux packages from `main` with stable version metadata,
+  instead of republishing beta-built binaries with renamed filenames.
+
+### Quality
+- Stable release workflow verifies that generated artifacts do not contain beta suffixes in their
+  filenames.
+
+---
+
 ## [0.2.7] — 2026-07-25
 
 ### Security
