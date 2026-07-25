@@ -15,7 +15,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ---
 
-## [0.2.5-beta.1] — 2026-07-25
+## [0.2.5] — 2026-07-25
 
 ### Security
 - Updated transitive Electron tooling dependency `fast-uri` from 3.1.2 to 3.1.4 to include
