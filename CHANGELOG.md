@@ -22,7 +22,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ### Quality
 - Aligns `main` with the FastAPI version already validated on `develop`, while keeping the
-  intentional beta/stable changelog split unchanged.
+  changelog stable-only across branches.
 
 ---
 
