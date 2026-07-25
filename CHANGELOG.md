@@ -15,6 +15,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ---
 
+## [0.2.7] — 2026-07-25
+
+### Security
+- Resolved Electron Forge toolchain audit findings by overriding vulnerable transitive build dependencies:
+  `@electron/rebuild` 3.7.2 → 4.2.0, `tar` 6.2.1 → 7.5.22,
+  `tmp` 0.0.33 → 0.2.7, and `brace-expansion` 1.1.14/2.1.0 → 5.0.8.
+
+### Dependencies
+- fastapi: 0.139.2 → 0.140.0
+
+### Quality
+- Electron dependency audit verified with 0 vulnerabilities.
+- Electron Forge packaging verified on Windows.
+- All Python tests passing: 47 passed, 1 skipped.
+- Frontend production build verified.
+
+---
+
 ## [0.2.5] — 2026-07-25
 
 ### Security
