@@ -15,6 +15,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ---
 
+## [0.2.6-beta.1] — 2026-07-25
+
+### Dependencies
+- fastapi: 0.139.2 → 0.140.0
+
+### Quality
+- All Python tests passing: 47 passed, 1 skipped
+- Frontend production build verified
+- Electron 43.2.0 installation verified
+
+---
+
 ## [0.2.5-beta.1] — 2026-07-25
 
 ### Security
