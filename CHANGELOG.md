@@ -15,19 +15,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ---
 
-## [0.2.9-beta.1] — 2026-07-25
+## [0.2.9] — 2026-07-25
 
 ### Dependencies
-- Carry forward the FastAPI update (`0.139.2` → `0.140.0`) for stable promotion, so `main`
-  matches the Python dependency already validated on `develop`.
+- fastapi: 0.139.2 → 0.140.0
 
 ### Quality
-- Release alignment fix to remove the remaining functional drift between `develop` and `main`
-  while preserving the intentional beta/stable changelog split.
+- Aligns `main` with the FastAPI version already validated on `develop`, while keeping the
+  changelog stable-only across branches.
 
 ---
 
-## [0.2.8-beta.1] — 2026-07-25
+## [0.2.8] — 2026-07-25
 
 ### Fixed
 - Stable releases now rebuild Windows and Linux packages from `main` with stable version metadata,
@@ -39,12 +38,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ---
 
-## [0.2.7-beta.1] — 2026-07-25
+## [0.2.7] — 2026-07-25
 
 ### Security
 - Resolved Electron Forge toolchain audit findings by overriding vulnerable transitive build dependencies:
   `@electron/rebuild` 3.7.2 → 4.2.0, `tar` 6.2.1 → 7.5.22,
   `tmp` 0.0.33 → 0.2.7, and `brace-expansion` 1.1.14/2.1.0 → 5.0.8.
+
+### Dependencies
+- fastapi: 0.139.2 → 0.140.0
 
 ### Quality
 - Electron dependency audit verified with 0 vulnerabilities.
@@ -54,19 +56,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ---
 
-## [0.2.6-beta.1] — 2026-07-25
-
-### Dependencies
-- fastapi: 0.139.2 → 0.140.0
-
-### Quality
-- All Python tests passing: 47 passed, 1 skipped
-- Frontend production build verified
-- Electron 43.2.0 installation verified
-
----
-
-## [0.2.5-beta.1] — 2026-07-25
+## [0.2.5] — 2026-07-25
 
 ### Security
 - Updated transitive Electron tooling dependency `fast-uri` from 3.1.2 to 3.1.4 to include
