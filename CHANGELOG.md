@@ -15,6 +15,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ---
 
+## [0.2.5] — 2026-07-25
+
+### Security
+- Updated transitive Electron tooling dependency `fast-uri` from 3.1.2 to 3.1.4 to include
+  upstream security fixes.
+
+### Dependencies
+- electron: 43.1.1 → 43.2.0 (Chromium/Electron fixes)
+- react: 19.2.7 → 19.2.8
+- react-dom: 19.2.7 → 19.2.8
+- lucide-react: 1.24.0 → 1.26.0
+- @vitejs/plugin-react: 6.0.3 → 6.0.4
+- @fontsource/inter: 5.2.8 → 5.3.0
+- @fontsource/jetbrains-mono: 5.2.8 → 5.3.0
+
+### Quality
+- All Python tests passing: 47 passed, 1 skipped
+- Frontend production build verified
+- Electron 43.2.0 installation verified
+
+---
+
 ## [0.2.4] — 2026-07-21
 
 ### Fixed
