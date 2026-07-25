@@ -15,6 +15,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ---
 
+## [0.2.9-beta.1] — 2026-07-25
+
+### Dependencies
+- Carry forward the FastAPI update (`0.139.2` → `0.140.0`) for stable promotion, so `main`
+  matches the Python dependency already validated on `develop`.
+
+### Quality
+- Release alignment fix to remove the remaining functional drift between `develop` and `main`
+  while preserving the intentional beta/stable changelog split.
+
+---
+
 ## [0.2.8-beta.1] — 2026-07-25
 
 ### Fixed
