@@ -13,7 +13,7 @@ updates:
     rebase-strategy: auto
     labels:
       - dependencies
-      - python
+      - lang:python
 
   # Node.js (Electron)
   - package-ecosystem: npm
@@ -25,7 +25,7 @@ updates:
     rebase-strategy: auto
     labels:
       - dependencies
-      - javascript
+      - lang:javascript
     ignore:
       # tar vulnerabilities - no upstream fix available
       # These are false positives for a desktop app: hardlink traversal/symlink poisoning
@@ -46,4 +46,23 @@ updates:
     rebase-strategy: auto
     labels:
       - dependencies
-      - javascript
+      - lang:javascript
+
+  # GitHub Actions (CI/CD workflow dependencies)
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: UTC
+    open-pull-requests-limit: 5
+    rebase-strategy: auto
+    labels:
+      - dependencies
+      - type:ci
+      - scope:deps
+    commit-message:
+      prefix: "ci(deps)"
+      include: scope
