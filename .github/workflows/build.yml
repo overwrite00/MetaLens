@@ -32,7 +32,7 @@ jobs:
         python-version: ['3.11', '3.12', '3.13']
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -72,7 +72,7 @@ jobs:
       ELECTRON_CACHE: ${{ github.workspace }}/.electron-cache
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
@@ -153,7 +153,7 @@ jobs:
       ELECTRON_CACHE: ${{ github.workspace }}/.electron-cache
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
@@ -218,7 +218,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: Install system dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y rpm fakeroot
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
@@ -366,7 +366,7 @@ jobs:
       ELECTRON_CACHE: ${{ github.workspace }}/.electron-cache
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
@@ -441,7 +441,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: Install system dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y rpm fakeroot
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
