@@ -61,6 +61,7 @@ jobs:
           cd frontend
           npm ci
           npm run build
+          npm run verify-icons
 
   test-electron:
     if: github.ref == 'refs/heads/develop'
