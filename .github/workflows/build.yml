@@ -300,7 +300,7 @@ jobs:
       - name: List artifacts
         run: find artifacts -type f
       - name: Create beta GitHub Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
           tag_name: v${{ needs.get-version-beta.outputs.beta_version }}
           target_commitish: ${{ github.sha }}
@@ -526,7 +526,7 @@ jobs:
       - name: List artifacts
         run: find artifacts -type f
       - name: Create stable GitHub Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
           tag_name: v${{ needs.get-version.outputs.version }}
           target_commitish: ${{ github.sha }}
