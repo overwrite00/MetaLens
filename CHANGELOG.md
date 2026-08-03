@@ -15,6 +15,34 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ---
 
+## [0.2.10] — 2026-08-03
+
+### Dependencies
+- fastapi: 0.140.0 → 0.140.8 (bug fixes)
+- lucide-react: 1.26.0 → 1.27.0 (new icons, upstream icon fixes)
+
+### CI/CD
+- actions/checkout: 6 → 7
+- actions/setup-node: 6 → 7
+- actions/setup-python: 6 → 7
+- actions/cache: 4 → 6
+- github/codeql-action: 4 → 4.37.3
+- Pinned `softprops/action-gh-release@v3` to its commit SHA, resolving CodeQL alerts #62/#63
+  (`actions/unpinned-tag`) for supply-chain integrity
+
+### Testing
+- Added `frontend/scripts/verify-lucide-icons.mjs`, run via `npm run verify-icons` in the
+  `test-frontend` CI job — checks every lucide-react icon imported in `src/` still resolves
+  after a version bump, since a renamed/removed icon fails silently at runtime rather than at
+  build time
+
+### Quality
+- All tests passing: 47 passed, 1 skipped
+- Frontend build and icon-resolution check verified with updated dependencies
+- No regressions
+
+---
+
 ## [0.2.9] — 2026-07-25
 
 ### Dependencies
