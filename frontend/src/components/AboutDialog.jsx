@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react'
 import { X, Layers } from 'lucide-react'
-import { metalens } from '../api/client'
 
 export function AboutDialog({ onClose }) {
   const [version, setVersion] = useState('…')
 
   useEffect(() => {
-    metalens.health().then(d => setVersion(d.version)).catch(() => setVersion('?'))
+    window.electronAPI.getAppVersion().then(setVersion).catch(() => setVersion('?'))
   }, [])
 
   return (

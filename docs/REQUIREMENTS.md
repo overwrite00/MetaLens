@@ -12,7 +12,7 @@ Requirements for running the pre-built MetaLens application and, separately, for
 | 📦 Use case | ✅ Requirement |
 |---|---|
 | **Run the compiled app** | Windows 10/11 (64-bit) or a modern Linux distro — nothing else |
-| **Build from source** | Python 3.11–3.13, Node.js 20+, npm 10+ |
+| **Build from source** | Python 3.13, Node.js 20+, npm 10+ |
 
 ---
 
@@ -60,7 +60,7 @@ Only needed if you want to modify MetaLens or package it yourself.
 
 | 📦 Tool | ✅ Version | 📝 Notes |
 |---|---|---|
-| **Python** | 3.11 – 3.13 | Used to run/package the FastAPI sidecar |
+| **Python** | 3.13 | Used to run/package the FastAPI sidecar |
 | **Node.js** | 20+ | Runs Electron and the Vite build |
 | **npm** | 10+ | Installs both `electron/` and `frontend/` dependencies |
 
@@ -89,5 +89,5 @@ See [Installation Guide → Build from Source](./INSTALLATION.md#-build-from-sou
 
 ---
 
-*Last updated: 2026-07-14*
+*Last updated: 2026-08-03*
 *← [README](../README.md) | [Installation →](./INSTALLATION.md)*

@@ -4,6 +4,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Sidecar port
   getPort: () => ipcRenderer.invoke('get-port'),
 
+  // Packaged app version (reflects beta suffix, unlike the sidecar's /health version)
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+
   // Native dialogs
   openFolderDialog: () => ipcRenderer.invoke('open-folder-dialog'),
   openFileDialog:   () => ipcRenderer.invoke('open-file-dialog'),

@@ -138,7 +138,7 @@ sudo apt --fix-broken install   # Debian/Ubuntu, after a failed .deb install
 
 **Cause:** Wrong Python/Node version, or dependencies not installed in the right subfolder.
 
-**Solution:** Confirm Python 3.11–3.13 and Node.js 20+ per [REQUIREMENTS.md](./REQUIREMENTS.md), and re-run `pip install -r requirements.txt` / `npm install` in the exact folders shown above.
+**Solution:** Confirm Python 3.13 and Node.js 20+ per [REQUIREMENTS.md](./REQUIREMENTS.md), and re-run `pip install -r requirements.txt` / `npm install` in the exact folders shown above.
 
 ---
 
@@ -149,5 +149,5 @@ sudo apt --fix-broken install   # Debian/Ubuntu, after a failed .deb install
 
 ---
 
-*Last updated: 2026-07-14*
+*Last updated: 2026-08-03*
 *← [Requirements](./REQUIREMENTS.md) | [Usage →](./USAGE.md)*

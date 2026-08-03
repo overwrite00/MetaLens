@@ -147,7 +147,7 @@ Compute cryptographic hashes on demand from the **Metadata** panel — no impact
 |---|---|---|
 | **Desktop shell** | Electron (Node.js main process) | Spawns the Python sidecar, native menus & dialogs |
 | **Renderer UI** | React 19, Vite, TailwindCSS v4 | Folder tree, file list, metadata detail panel |
-| **Sidecar** | Python 3.11–3.13, FastAPI, uvicorn | Metadata extraction/write engine, `127.0.0.1` only |
+| **Sidecar** | Python 3.13, FastAPI, uvicorn | Metadata extraction/write engine, `127.0.0.1` only |
 
 ```
 Electron Main (Node.js)
@@ -234,5 +234,5 @@ Distributed with MIT License · [View License](LICENSE)
 
 ---
 
-*Last updated: 2026-07-31*
+*Last updated: 2026-08-03*
 *← [Requirements](docs/REQUIREMENTS.md) | [Docs →](docs/)*

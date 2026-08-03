@@ -122,6 +122,8 @@ function stopSidecar() {
 function setupIPC() {
   ipcMain.handle('get-port', () => sidecarPort)
 
+  ipcMain.handle('get-app-version', () => app.getVersion())
+
   ipcMain.handle('open-folder-dialog', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory'],
