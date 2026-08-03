@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 
-VERSION = "0.2.11"
+VERSION = "0.3.0"
 APP_NAME = "MetaLens"
 SIDECAR_HOST = "127.0.0.1"
 

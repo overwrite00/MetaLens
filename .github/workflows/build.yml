@@ -29,7 +29,7 @@ jobs:
       contents: read
     strategy:
       matrix:
-        python-version: ['3.11', '3.12', '3.13']
+        python-version: ['3.13']
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -75,7 +75,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: '3.12'
+          python-version: '3.13'
           cache: pip
           cache-dependency-path: python/requirements.txt
       - name: Install Python
@@ -156,7 +156,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: '3.12'
+          python-version: '3.13'
           cache: pip
           cache-dependency-path: python/requirements.txt
       - name: Build Python sidecar
@@ -221,7 +221,7 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y rpm fakeroot
       - uses: actions/setup-python@v7
         with:
-          python-version: '3.12'
+          python-version: '3.13'
           cache: pip
           cache-dependency-path: python/requirements.txt
       - name: Build Python sidecar
@@ -369,7 +369,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: '3.12'
+          python-version: '3.13'
           cache: pip
           cache-dependency-path: python/requirements.txt
       - name: Build Python sidecar
@@ -444,7 +444,7 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y rpm fakeroot
       - uses: actions/setup-python@v7
         with:
-          python-version: '3.12'
+          python-version: '3.13'
           cache: pip
           cache-dependency-path: python/requirements.txt
       - name: Build Python sidecar

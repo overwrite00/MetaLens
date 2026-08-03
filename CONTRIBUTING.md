@@ -42,7 +42,7 @@ Before contributing, please review this guide and our [Code of Conduct](./CODE_O
 
 ### Prerequisites
 
-- **Python**: 3.11, 3.12, or 3.13 (see [REQUIREMENTS.md](./docs/REQUIREMENTS.md))
+- **Python**: 3.13 (see [REQUIREMENTS.md](./docs/REQUIREMENTS.md))
 - **Node.js**: 20+
 - **npm**: 10+
 - **Git**
@@ -221,5 +221,5 @@ Thank you for contributing to MetaLens! Your efforts help make file metadata man
 
 ---
 
-*Last updated: 2026-07-14*
+*Last updated: 2026-08-03*
 *← [Code of Conduct](./CODE_OF_CONDUCT.md) | [Security →](./SECURITY.md)*
