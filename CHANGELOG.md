@@ -13,6 +13,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - [ ] **Batch Edit** — Apply a field change to multiple selected files at once
 - [ ] **Search/Filter Bar** — Filter the file list by name or extension
 
+### CI/CD
+- github/codeql-action: 4.37.3 → 4.37.4
+
 ---
 
 ## [0.2.10] — 2026-08-03
