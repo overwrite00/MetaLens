@@ -3,7 +3,7 @@
 
 # Web server
 fastapi==0.140.8
-uvicorn==0.51.0
+uvicorn==0.52.1
 
 # Images
 Pillow==12.3.0
