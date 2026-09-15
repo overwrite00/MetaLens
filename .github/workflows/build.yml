@@ -9,6 +9,14 @@ on:
       - 'CHANGELOG.md'
       - 'LICENSE'
       - '*.md'
+  pull_request:
+    branches: [develop]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'LICENSE'
+      - '*.md'
   workflow_dispatch: {}
 
 env:
@@ -23,7 +31,7 @@ jobs:
   # TEST BUILD (develop only) — Verify code compiles and tests pass
   # ─────────────────────────────────────────────────────────────────────────────
   test-python:
-    if: github.ref == 'refs/heads/develop'
+    if: github.ref == 'refs/heads/develop' || (github.event_name == 'pull_request' && github.base_ref == 'develop')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -45,7 +53,7 @@ jobs:
           pytest tests/ -v
 
   test-frontend:
-    if: github.ref == 'refs/heads/develop'
+    if: github.ref == 'refs/heads/develop' || (github.event_name == 'pull_request' && github.base_ref == 'develop')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -64,7 +72,7 @@ jobs:
           npm run verify-icons
 
   test-electron:
-    if: github.ref == 'refs/heads/develop'
+    if: github.ref == 'refs/heads/develop' || (github.event_name == 'pull_request' && github.base_ref == 'develop')
     needs: test-frontend
     runs-on: ubuntu-latest
     permissions:
