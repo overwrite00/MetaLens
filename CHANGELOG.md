@@ -13,6 +13,46 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - [ ] **Batch Edit** — Apply a field change to multiple selected files at once
 - [ ] **Search/Filter Bar** — Filter the file list by name or extension
 
+### CI/CD (pending promotion to stable)
+- Fixed `build.yml`: added a `pull_request` trigger targeting `develop` so the required status
+  checks (`test-python`, `test-frontend`, `test-electron`) can actually run on PRs. Previously the
+  workflow only triggered on `push`, so those checks could never complete and every PR into
+  `develop` was permanently blocked by the branch ruleset.
+- Updated the `develop` branch ruleset to drop the obsolete `test-python (3.11)` / `(3.12)`
+  required contexts — the CI matrix was already reduced to 3.13 only.
+- Disabled Dependabot's automatic security updates for the repo: those always ignore
+  `target-branch` and land directly on `main`, bypassing the develop-first workflow. Security
+  fixes now arrive only through the weekly version-update scans targeting `develop`.
+
+### Dependencies (pending promotion to stable)
+- github/codeql-action: 4.37.4 → 4.38.0
+- lucide-react: 1.27.0 → 1.45.0
+- electron: 43.2.0 → 44.3.0
+- pypdf: 6.14.2 → 6.18.1
+- softprops/action-gh-release: 3.0.2 → 3.0.3
+- @vitejs/plugin-react: 6.0.4 → 6.1.1
+- vite: 8.1.5 → 8.3.0
+- uvicorn: 0.51.0 → 0.52.4
+- fastapi: 0.140.8 → 0.141.1
+
+### Security (pending promotion to stable)
+- undici (electron, transitive via `@electron/get`): 7.28.0 → 7.29.1 — fixes
+  [GHSA-4cwx-7wf7-3272](https://github.com/nodejs/undici/security/advisories/GHSA-4cwx-7wf7-3272)
+  (high severity cache-poisoning) plus a medium-severity advisory. Lockfile-only catch-up
+  mirroring the fix Dependabot had already applied directly to `main`.
+- @xmldom/xmldom: 0.8.13 → 0.8.15 — fixes several ReDoS/quadratic-memory parsing advisories.
+- browserslist: 4.28.2 → 4.29.0, baseline-browser-mapping: 2.10.37 → 2.11.23,
+  fast-uri: 3.1.4 → 3.1.8 — grouped security update, lockfile-only catch-up mirroring `main`.
+
+### Quality
+- All tests passing: 47 passed, 1 skipped (verified locally after every dependency bump)
+- Frontend build and icon-resolution check verified after the Vite / `@vitejs/plugin-react` /
+  lucide-react bumps
+- Python sidecar smoke-tested end-to-end (`uvicorn`/`fastapi` live; `/health` and `/read`
+  verified against a real file) after the dependency bumps
+- Frontend UI smoke-tested in-browser against the running sidecar after the Vite 8.3 bump — no
+  console errors
+
 ---
 
 ## [0.3.0] — 2026-08-03

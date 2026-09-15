@@ -81,7 +81,7 @@ File (image / audio / video / document / anything)
 
 ## 🔧 Version
 
-**v0.2.10** — Routine dependency updates (fastapi 0.140.8, lucide-react 1.27.0) plus CI hardening (actions/checkout v7, setup-node v7, setup-python v7, cache v6, codeql-action 4.37.3). No changes to application behavior or the API.
+**v0.3.0** — Dropped Python 3.11/3.12 support (Python 3.13 only). About dialog now shows the correct packaged app version, including the `-beta.N` suffix on beta builds. No other changes to application behavior or the API.
 
 📖 **See full version history** → [CHANGELOG.md](./CHANGELOG.md)
 
