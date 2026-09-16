@@ -14,13 +14,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - [ ] **Search/Filter Bar** — Filter the file list by name or extension
 
 ### CI/CD (pending promotion to stable)
-- Fixed `release-stable` in `build.yml`: it was silently rebuilding the sidecar/frontend/Electron
-  package from scratch on `main` (`build-windows-stable` / `build-linux-stable` jobs) instead of
-  reusing the already-built and CI-verified beta artifacts, contradicting the documented pipeline
-  design and doubling build time/cost for every stable release. `release-stable` now downloads the
-  matching `vX.Y.Z-beta.N` release assets found by `find-latest-beta`, strips the beta suffix from
-  each filename (`[-.]?beta\.?[0-9]+`, covering all 4 naming conventions across `.exe`/`.tar.gz`/
-  `.rpm`/`.deb`), verifies no `beta`-named files remain, and publishes those directly — no rebuild.
+- Reverted a same-day `release-stable` change that made it download the matching beta's release
+  assets and strip the `-beta.N` suffix from filenames instead of rebuilding. That approach is
+  broken for packaged installers: the beta build runs `npm version <beta>` before packaging, and
+  Electron Forge's Squirrel maker bakes that version string deep into the package (the `.nupkg`
+  name, the `RELEASES` file, `Update.exe` metadata) — not just the outer filename. Renaming the
+  `.exe` afterward leaves the internal package version mismatched with the filename, which made
+  the Windows installer hang at "Installing" and never launch (`.deb`/`.rpm` package metadata is
+  equally affected). `release-stable` rebuilds from `main` with correct stable version metadata
+  again, as it has since `0.2.8` — see that entry below for the original fix this regressed.
 
 ---
 
