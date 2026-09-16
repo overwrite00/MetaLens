@@ -81,7 +81,7 @@ File (image / audio / video / document / anything)
 
 ## 🔧 Version
 
-**v0.2.10** — Routine dependency updates (fastapi 0.140.8, lucide-react 1.27.0) plus CI hardening (actions/checkout v7, setup-node v7, setup-python v7, cache v6, codeql-action 4.37.3). No changes to application behavior or the API.
+**v0.3.1** — Security/dependency catch-up: `pypdf`, `@xmldom/xmldom`, `fast-uri`, `browserslist`, `postcss`, and Electron's `undici` bumped to close several Dependabot advisories. No application behavior or API changes.
 
 📖 **See full version history** → [CHANGELOG.md](./CHANGELOG.md)
 
@@ -234,5 +234,5 @@ Distributed with MIT License · [View License](LICENSE)
 
 ---
 
-*Last updated: 2026-08-03*
+*Last updated: 2026-09-16*
 *← [Requirements](docs/REQUIREMENTS.md) | [Docs →](docs/)*
