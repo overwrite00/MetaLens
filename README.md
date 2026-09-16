@@ -81,7 +81,7 @@ File (image / audio / video / document / anything)
 
 ## 🔧 Version
 
-**v0.3.0** — Dropped Python 3.11/3.12 support (Python 3.13 only). About dialog now shows the correct packaged app version, including the `-beta.N` suffix on beta builds. No other changes to application behavior or the API.
+**v0.3.1** — Security/dependency catch-up: `pypdf`, `@xmldom/xmldom`, `fast-uri`, `browserslist`, `postcss`, and Electron's `undici` bumped to close several Dependabot advisories. No application behavior or API changes.
 
 📖 **See full version history** → [CHANGELOG.md](./CHANGELOG.md)
 
@@ -234,5 +234,5 @@ Distributed with MIT License · [View License](LICENSE)
 
 ---
 
-*Last updated: 2026-09-15*
+*Last updated: 2026-09-16*
 *← [Requirements](docs/REQUIREMENTS.md) | [Docs →](docs/)*
