@@ -28,7 +28,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - github/codeql-action: 4.37.4 → 4.38.0
 - lucide-react: 1.27.0 → 1.45.0
 - electron: 43.2.0 → 44.3.0
-- pypdf: 6.14.2 → 6.18.1
 - softprops/action-gh-release: 3.0.2 → 3.0.3
 - @vitejs/plugin-react: 6.0.4 → 6.1.1
 - vite: 8.1.5 → 8.3.0
@@ -41,8 +40,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
   (high severity cache-poisoning) plus a medium-severity advisory. Lockfile-only catch-up
   mirroring the fix Dependabot had already applied directly to `main`.
 - @xmldom/xmldom: 0.8.13 → 0.8.15 — fixes several ReDoS/quadratic-memory parsing advisories.
-- browserslist: 4.28.2 → 4.29.0, baseline-browser-mapping: 2.10.37 → 2.11.23,
+- browserslist: 4.28.2 → 4.29.0, baseline-browser-mapping: 2.10.37 → 2.11.24,
   fast-uri: 3.1.4 → 3.1.8 — grouped security update, lockfile-only catch-up mirroring `main`.
+- postcss (frontend, transitive via `vite`): 8.5.20 → 8.5.28 — fixes
+  [GHSA-fxqj-rqcc-2cmp](https://github.com/postcss/postcss/security/advisories/GHSA-fxqj-rqcc-2cmp)
+  (arbitrary `.map` file read via attacker-controlled `sourceMappingURL`).
+- pypdf: 6.14.2 → 6.16.1 → 6.18.1 — fixes 3 GHSA advisories (infinite loop / long-runtime /
+  high-memory usage on malformed PDF input).
 
 ### Quality
 - All tests passing: 47 passed, 1 skipped (verified locally after every dependency bump)
