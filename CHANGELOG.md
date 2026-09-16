@@ -13,15 +13,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - [ ] **Batch Edit** — Apply a field change to multiple selected files at once
 - [ ] **Search/Filter Bar** — Filter the file list by name or extension
 
-### CI/CD (pending promotion to stable)
-- Fixed `release-stable` in `build.yml`: it was silently rebuilding the sidecar/frontend/Electron
-  package from scratch on `main` (`build-windows-stable` / `build-linux-stable` jobs) instead of
-  reusing the already-built and CI-verified beta artifacts, contradicting the documented pipeline
-  design and doubling build time/cost for every stable release. `release-stable` now downloads the
-  matching `vX.Y.Z-beta.N` release assets found by `find-latest-beta`, strips the beta suffix from
-  each filename (`[-.]?beta\.?[0-9]+`, covering all 4 naming conventions across `.exe`/`.tar.gz`/
-  `.rpm`/`.deb`), verifies no `beta`-named files remain, and publishes those directly — no rebuild.
-
 ---
 
 ## [0.3.1] — 2026-09-16
