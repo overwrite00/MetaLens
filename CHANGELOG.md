@@ -13,6 +13,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - [ ] **Batch Edit** — Apply a field change to multiple selected files at once
 - [ ] **Search/Filter Bar** — Filter the file list by name or extension
 
+### CI/CD (pending promotion to stable)
+- Reverted a same-day `release-stable` change that made it download the matching beta's release
+  assets and strip the `-beta.N` suffix from filenames instead of rebuilding. That approach is
+  broken for packaged installers: the beta build runs `npm version <beta>` before packaging, and
+  Electron Forge's Squirrel maker bakes that version string deep into the package (the `.nupkg`
+  name, the `RELEASES` file, `Update.exe` metadata) — not just the outer filename. Renaming the
+  `.exe` afterward leaves the internal package version mismatched with the filename, which made
+  the Windows installer hang at "Installing" and never launch (`.deb`/`.rpm` package metadata is
+  equally affected). `release-stable` rebuilds from `main` with correct stable version metadata
+  again, as it has since `0.2.8` — see that entry below for the original fix this regressed.
+
 ---
 
 ## [0.3.1] — 2026-09-16
