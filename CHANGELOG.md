@@ -13,7 +13,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - [ ] **Batch Edit** — Apply a field change to multiple selected files at once
 - [ ] **Search/Filter Bar** — Filter the file list by name or extension
 
-### CI/CD (pending promotion to stable)
+---
+
+## [0.3.1] — 2026-09-16
+
+### CI/CD
 - Fixed `build.yml`: added a `pull_request` trigger targeting `develop` so the required status
   checks (`test-python`, `test-frontend`, `test-electron`) can actually run on PRs. Previously the
   workflow only triggered on `push`, so those checks could never complete and every PR into
@@ -24,7 +28,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
   `target-branch` and land directly on `main`, bypassing the develop-first workflow. Security
   fixes now arrive only through the weekly version-update scans targeting `develop`.
 
-### Dependencies (pending promotion to stable)
+### Dependencies
 - github/codeql-action: 4.37.4 → 4.38.0
 - lucide-react: 1.27.0 → 1.45.0
 - electron: 43.2.0 → 44.3.0
@@ -34,7 +38,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - uvicorn: 0.51.0 → 0.52.4
 - fastapi: 0.140.8 → 0.141.1
 
-### Security (pending promotion to stable)
+### Security
 - undici (electron, transitive via `@electron/get`): 7.28.0 → 7.29.1 — fixes
   [GHSA-4cwx-7wf7-3272](https://github.com/nodejs/undici/security/advisories/GHSA-4cwx-7wf7-3272)
   (high severity cache-poisoning) plus a medium-severity advisory. Lockfile-only catch-up
