@@ -13,7 +13,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - [ ] **Batch Edit** — Apply a field change to multiple selected files at once
 - [ ] **Search/Filter Bar** — Filter the file list by name or extension
 
-### Dependencies (0.3.2-beta, pending promotion to stable)
+---
+
+## [0.3.2] — 2026-09-19
+
+### Dependencies
 - hachoir: 3.3.0 → 3.4.0
 - uvicorn: 0.52.4 → 0.53.0
 - react / react-dom: 19.2.8 → 19.3.0
@@ -22,10 +26,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - Verified at runtime with the pinned versions (hachoir 3.4.0, uvicorn 0.53.0, react 19.3.0): live sidecar smoke test on `/health`, `/list`, `/read`, `/hash`, `/diff`, and UI render + About dialog + tab switching with no console errors
 - Verified: frontend build, `verify-icons` (34 icons OK)
 
-### Fixed (pending promotion to stable)
+### Fixed
 - `AboutDialog` no longer crashes the whole page when `window.electronAPI` is undefined (e.g. the renderer opened outside Electron); it now shows "?" as the version, consistent with the guard already in `App.jsx`. No behavior change inside Electron.
 
-### CI/CD (pending promotion to stable)
+### CI/CD
 - Reverted a same-day `release-stable` change that made it download the matching beta's release
   assets and strip the `-beta.N` suffix from filenames instead of rebuilding. That approach is
   broken for packaged installers: the beta build runs `npm version <beta>` before packaging, and
