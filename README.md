@@ -81,7 +81,7 @@ File (image / audio / video / document / anything)
 
 ## 🔧 Version
 
-**v0.3.1** — Security/dependency catch-up: `pypdf`, `@xmldom/xmldom`, `fast-uri`, `browserslist`, `postcss`, and Electron's `undici` bumped to close several Dependabot advisories. No application behavior or API changes.
+**v0.3.2** — Routine dependency updates (`hachoir` 3.4.0, `uvicorn` 0.53.0, `react`/`react-dom` 19.3.0, `lucide-react` 1.46.0), new tests for the hachoir fallback, and a fix so the About dialog no longer crashes when opened outside Electron. No API changes.
 
 📖 **See full version history** → [CHANGELOG.md](./CHANGELOG.md)
 
@@ -175,7 +175,7 @@ React Frontend (Vite + TailwindCSS)
 
 ## 📊 Test Suite
 
-✅ **48 automated tests** covering handlers, the handler registry, and path-security validation.
+✅ **52 automated tests** covering handlers (including the hachoir fallback), the handler registry, and path-security validation.
 
 ```bash
 pytest python/tests/ -v
@@ -234,5 +234,5 @@ Distributed with MIT License · [View License](LICENSE)
 
 ---
 
-*Last updated: 2026-09-16*
+*Last updated: 2026-09-19*
 *← [Requirements](docs/REQUIREMENTS.md) | [Docs →](docs/)*

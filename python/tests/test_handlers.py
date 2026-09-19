@@ -229,6 +229,54 @@ def test_filesystem_always_reads(tmp_path):
     assert "fs:mtime" in keys
 
 
+# ──────────────────────── hachoir fallback ───────────────────────────────────
+
+@pytest.fixture
+def sample_wav(tmp_path) -> Path:
+    import wave
+    path = tmp_path / "tone.wav"
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(8000)
+        w.writeframes(bytes(16000))  # 1 second of silence
+    return path
+
+
+def test_hachoir_reads_recognized_format(sample_wav):
+    from core.handlers.hachoir_handler import HachoirHandler
+    record = HachoirHandler().read(sample_wav)
+    assert record.read_errors == []
+    assert record.fields, "hachoir should extract metadata from a valid WAV"
+    assert all(f.source == "hachoir" and not f.editable and not f.deletable
+               for f in record.fields)
+    assert any(f.key.startswith("hachoir:") for f in record.fields)
+
+
+def test_hachoir_unrecognized_format_is_graceful(tmp_path):
+    from core.handlers.hachoir_handler import HachoirHandler
+    f = tmp_path / "noise.xyz"
+    f.write_bytes(bytes([0x13, 0x37]) * 64)
+    record = HachoirHandler().read(f)  # must not raise
+    assert record.fields == []
+    assert record.read_errors
+
+
+def test_hachoir_is_read_only(sample_wav):
+    from core.handlers.hachoir_handler import HachoirHandler
+    with pytest.raises(NotImplementedError):
+        HachoirHandler().write(sample_wav, [])
+    with pytest.raises(NotImplementedError):
+        HachoirHandler().delete(sample_wav, ["hachoir:duration"])
+
+
+def test_video_hachoir_reader_extracts_fields(sample_wav):
+    from core.handlers.video_handler import _read_hachoir
+    fields, errors = _read_hachoir(sample_wav)
+    assert errors == []
+    assert fields and all(f.source == "hachoir" for f in fields)
+
+
 # ──────────────────────── API health endpoint ────────────────────────────────
 
 @pytest.mark.asyncio
