@@ -307,6 +307,17 @@ jobs:
           path: artifacts
       - name: List artifacts
         run: find artifacts -type f
+      - name: Find previous release tag
+        id: prev
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Pin the release-notes comparison base to the release published just before this
+          # one (previous beta or last stable). Left to itself GitHub picks the base
+          # heuristically and sometimes lists dozens of unrelated, older PRs.
+          PREV=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName             --jq '[.[] | select(.tagName != "v${{ needs.get-version-beta.outputs.beta_version }}")][0].tagName // empty')
+          echo "previous_tag=$PREV" >> "$GITHUB_OUTPUT"
+          echo "Release notes base: ${PREV:-<none, GitHub default>}"
       - name: Create beta GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
@@ -316,6 +327,7 @@ jobs:
           draft: false
           prerelease: true
           generate_release_notes: true
+          previous_tag: ${{ steps.prev.outputs.previous_tag }}
           make_latest: false
           files: |
             artifacts/windows-installer-beta/**
@@ -533,6 +545,17 @@ jobs:
           path: artifacts
       - name: List artifacts
         run: find artifacts -type f
+      - name: Find previous stable release tag
+        id: prev
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Pin the release-notes comparison base to the last published stable release
+          # (betas excluded). Left to itself GitHub picks the base heuristically and has
+          # listed dozens of unrelated, older PRs (e.g. v0.2.10, v0.3.2 compared to v0.2.0).
+          PREV=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --exclude-pre-releases --json tagName             --jq '[.[] | select(.tagName != "v${{ needs.get-version.outputs.version }}")][0].tagName // empty')
+          echo "previous_tag=$PREV" >> "$GITHUB_OUTPUT"
+          echo "Release notes base: ${PREV:-<none, GitHub default>}"
       - name: Create stable GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
@@ -542,6 +565,7 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+          previous_tag: ${{ steps.prev.outputs.previous_tag }}
           make_latest: true
           files: |
             artifacts/windows-installer-stable/**

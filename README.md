@@ -81,7 +81,7 @@ File (image / audio / video / document / anything)
 
 ## 🔧 Version
 
-**v0.3.2** — Routine dependency updates (`hachoir` 3.4.0, `uvicorn` 0.53.0, `react`/`react-dom` 19.3.0, `lucide-react` 1.46.0), new tests for the hachoir fallback, and a fix so the About dialog no longer crashes when opened outside Electron. No API changes.
+**v0.3.3** — CI-only release: GitHub release notes now compare against a pinned previous release, so they list only the PRs actually included. No application behavior or API changes.
 
 📖 **See full version history** → [CHANGELOG.md](./CHANGELOG.md)
 
