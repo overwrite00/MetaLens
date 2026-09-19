@@ -13,6 +13,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - [ ] **Batch Edit** — Apply a field change to multiple selected files at once
 - [ ] **Search/Filter Bar** — Filter the file list by name or extension
 
+---
+
+## [0.3.3] — 2026-09-19
+
 ### CI/CD
 - `release-beta` and `release-stable` now pass `previous_tag` to `softprops/action-gh-release`, so
   the auto-generated release notes compare against a known base (the previous release for betas,
