@@ -13,6 +13,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - [ ] **Batch Edit** — Apply a field change to multiple selected files at once
 - [ ] **Search/Filter Bar** — Filter the file list by name or extension
 
+### CI/CD
+- `release-beta` and `release-stable` now pass `previous_tag` to `softprops/action-gh-release`, so
+  the auto-generated release notes compare against a known base (the previous release for betas,
+  the last stable release for stables) instead of a base GitHub guesses. The guess was unreliable:
+  `v0.2.10` and `v0.3.2` were compared against `v0.2.0` and listed dozens of unrelated, older PRs.
+- The published `v0.3.2` release notes were regenerated against `v0.3.1` (8 PRs instead of ~50).
+
 ---
 
 ## [0.3.2] — 2026-09-19
