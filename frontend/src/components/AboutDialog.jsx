@@ -5,6 +5,10 @@ export function AboutDialog({ onClose }) {
   const [version, setVersion] = useState('…')
 
   useEffect(() => {
+    if (!window.electronAPI) {
+      setVersion('?')
+      return
+    }
     window.electronAPI.getAppVersion().then(setVersion).catch(() => setVersion('?'))
   }, [])
 
