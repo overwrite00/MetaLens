@@ -13,6 +13,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - [ ] **Batch Edit** — Apply a field change to multiple selected files at once
 - [ ] **Search/Filter Bar** — Filter the file list by name or extension
 
+### Dependencies (0.3.2-beta, pending promotion to stable)
+- hachoir: 3.3.0 → 3.4.0
+- uvicorn: 0.52.4 → 0.53.0
+- react / react-dom: 19.2.8 → 19.3.0
+- lucide-react: 1.45.0 → 1.46.0
+- Verified: pytest 47 passed / 1 skipped, frontend build, `verify-icons` (34 icons OK)
+
 ### CI/CD (pending promotion to stable)
 - Reverted a same-day `release-stable` change that made it download the matching beta's release
   assets and strip the `-beta.N` suffix from filenames instead of rebuilding. That approach is
