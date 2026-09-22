@@ -13,6 +13,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - [ ] **Batch Edit** — Apply a field change to multiple selected files at once
 - [ ] **Search/Filter Bar** — Filter the file list by name or extension
 
+### CI/CD
+- Dependabot `schedule.interval` switched from `weekly` to `monthly` across all 4 ecosystems
+  (pip, electron npm, frontend npm, github-actions). Security-update PRs are unaffected —
+  Dependabot opens those immediately on CVE discovery regardless of `schedule.interval`.
+- `github/codeql-action` bumped 4.38.0 → 4.38.1.
+- Bumped `VERSION` to `0.3.4` on `develop` right after the `0.3.3` stable promotion, so that
+  further pushes to `develop` (even CI/config-only ones) build a new `0.3.4-beta.N` instead of
+  re-publishing orphan prereleases under the already-shipped `0.3.3`.
+
 ---
 
 ## [0.3.3] — 2026-09-19
