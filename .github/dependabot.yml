@@ -4,7 +4,7 @@ updates:
   - package-ecosystem: pip
     directory: /python
     schedule:
-      interval: weekly
+      interval: monthly
     open-pull-requests-limit: 5
     # Route version-update PRs to develop (dev branch); main is release-only.
     # NOTE: Dependabot *security* updates ignore target-branch and always
@@ -19,7 +19,7 @@ updates:
   - package-ecosystem: npm
     directory: /electron
     schedule:
-      interval: weekly
+      interval: monthly
     open-pull-requests-limit: 5
     target-branch: develop
     rebase-strategy: auto
@@ -40,7 +40,7 @@ updates:
   - package-ecosystem: npm
     directory: /frontend
     schedule:
-      interval: weekly
+      interval: monthly
     open-pull-requests-limit: 5
     target-branch: develop
     rebase-strategy: auto
@@ -53,8 +53,7 @@ updates:
     directory: /
     target-branch: develop
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
       time: "04:00"
       timezone: UTC
     open-pull-requests-limit: 5
