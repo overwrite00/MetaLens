@@ -13,6 +13,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - [ ] **Batch Edit** — Apply a field change to multiple selected files at once
 - [ ] **Search/Filter Bar** — Filter the file list by name or extension
 
+### Dependencies
+- pypdf: 6.18.1 → 6.19.0
+- lucide-react: 1.46.0 → 1.47.0
+- electron (dev): 44.3.0 → 44.4.3
+- Verified at runtime with the pinned versions: fresh venv + live sidecar smoke test on
+  `/health`, `/read`, `/write` with a real PDF (pypdf 6.19.0); frontend build + browser render
+  with no console errors, all 34 used icons confirmed present (lucide-react 1.47.0); a real
+  Electron dev run (sidecar spawn, window load, clean shutdown, no errors) (electron 44.4.3).
+  Full suite: 51 passed / 1 skipped.
+
 ### CI/CD
 - Dependabot `schedule.interval` switched from `weekly` to `monthly` across all 4 ecosystems
   (pip, electron npm, frontend npm, github-actions). Security-update PRs are unaffected —
