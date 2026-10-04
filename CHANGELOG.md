@@ -15,19 +15,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ### Dependencies
 - pypdf: 6.18.1 → 6.19.0
-- lucide-react: 1.46.0 → 1.47.0
-- electron (dev): 44.3.0 → 44.4.3
-- Verified at runtime with the pinned versions: fresh venv + live sidecar smoke test on
-  `/health`, `/read`, `/write` with a real PDF (pypdf 6.19.0); frontend build + browser render
-  with no console errors, all 34 used icons confirmed present (lucide-react 1.47.0); a real
-  Electron dev run (sidecar spawn, window load, clean shutdown, no errors) (electron 44.4.3).
-  Full suite: 51 passed / 1 skipped.
+- uvicorn: 0.53.0 → 0.54.0
+- lucide-react: 1.46.0 → 1.48.0
+- vite (dev): 8.3.0 → 8.3.1
+- electron (dev): 44.3.0 → 44.4.5
+- Verified at runtime with the pinned versions: fresh Python 3.13 venv + live sidecar smoke test on
+  `/health`, `/read`, `/write`, `/delete` and an invalid path with a real PDF (pypdf 6.19.0,
+  uvicorn 0.54.0); frontend build, `verify-icons` (all 34 used icons present) and browser render
+  with no console errors, on both the production build and the vite dev server (lucide-react
+  1.48.0, vite 8.3.1); a real Electron dev run (sidecar spawn, window load, clean shutdown, no
+  errors) (electron 44.4.5). Combined check on the final `develop`: full suite 51 passed / 1 skipped.
 
 ### CI/CD
 - Dependabot `schedule.interval` switched from `weekly` to `monthly` across all 4 ecosystems
   (pip, electron npm, frontend npm, github-actions). Security-update PRs are unaffected —
   Dependabot opens those immediately on CVE discovery regardless of `schedule.interval`.
-- `github/codeql-action` bumped 4.38.0 → 4.38.1.
+- `github/codeql-action` bumped 4.38.0 → 4.38.2.
 - Bumped `VERSION` to `0.3.4` on `develop` right after the `0.3.3` stable promotion, so that
   further pushes to `develop` (even CI/config-only ones) build a new `0.3.4-beta.N` instead of
   re-publishing orphan prereleases under the already-shipped `0.3.3`.
