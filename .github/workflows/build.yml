@@ -122,6 +122,7 @@ jobs:
         run: |
           cd electron
           npm ci --include=dev
+          npm test
 
   # ─────────────────────────────────────────────────────────────────────────────
   # BETA RELEASE (develop only) — Package and publish a prerelease build

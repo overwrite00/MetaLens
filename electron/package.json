@@ -7,7 +7,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "make": "electron-forge make"
+    "make": "electron-forge make",
+    "test": "node --test"
   },
   "devDependencies": {
     "@electron-forge/cli": "^8.0.1",
