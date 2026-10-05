@@ -13,6 +13,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - [ ] **Batch Edit** — Apply a field change to multiple selected files at once
 - [ ] **Search/Filter Bar** — Filter the file list by name or extension
 
+---
+
+## [0.3.4] — 2026-10-05
+
 ### Security
 - Resolved the two open Dependabot alerts on `extract-zip` ≤ 2.0.1 (GHSA-7pqw-9j4j-h8q3,
   GHSA-jmr9-qjv8-65gv — no upstream patch exists) by upgrading Electron Forge to 8.x: its packager

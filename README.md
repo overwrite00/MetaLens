@@ -81,7 +81,7 @@ File (image / audio / video / document / anything)
 
 ## 🔧 Version
 
-**v0.3.3** — CI-only release: GitHub release notes now compare against a pinned previous release, so they list only the PRs actually included. No application behavior or API changes.
+**v0.3.4** — Security and maintenance release: the build toolchain moves to Electron Forge 8 (resolving the open `extract-zip` advisories), closing the app no longer leaves the background sidecar process running, and dependencies are updated (uvicorn, pypdf, lucide-react, Vite, Electron). No API changes.
 
 📖 **See full version history** → [CHANGELOG.md](./CHANGELOG.md)
 
@@ -234,5 +234,5 @@ Distributed with MIT License · [View License](LICENSE)
 
 ---
 
-*Last updated: 2026-09-19*
+*Last updated: 2026-10-05*
 *← [Requirements](docs/REQUIREMENTS.md) | [Docs →](docs/)*
