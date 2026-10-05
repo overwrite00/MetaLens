@@ -63,6 +63,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
   (pip, electron npm, frontend npm, github-actions). Security-update PRs are unaffected —
   Dependabot opens those immediately on CVE discovery regardless of `schedule.interval`.
 - `github/codeql-action` bumped 4.38.0 → 4.38.2.
+- CI moved from Node 22 to Node 24 LTS (`actions/setup-node`, all jobs). Node 22 enters
+  maintenance-only and reaches end of life in April 2027; Electron Forge 7 could not complete
+  packaging under Node 24, Forge 8 can. Minimum supported Node.js for building from source stays
+  22.13+. `electron-winstaller` updated 5.4.0 → 5.4.4 (within the existing range): 5.4.1 fixed a
+  call to `fs.existsSync(undefined)` that raised a `DEP0187` deprecation warning on Node 24 while
+  creating the Squirrel installer.
 - `test-electron` now runs the Electron unit tests (`npm test` in `electron/`, `node --test`),
   starting with the process-tree shutdown test. It fails if the old `kill()` behavior returns.
 - Bumped `VERSION` to `0.3.4` on `develop` right after the `0.3.3` stable promotion, so that

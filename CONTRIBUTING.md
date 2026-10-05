@@ -43,7 +43,7 @@ Before contributing, please review this guide and our [Code of Conduct](./CODE_O
 ### Prerequisites
 
 - **Python**: 3.13 (see [REQUIREMENTS.md](./docs/REQUIREMENTS.md))
-- **Node.js**: 22.13+
+- **Node.js**: 22.13+ (24 LTS recommended, used by CI)
 - **npm**: 10+
 - **Git**
 

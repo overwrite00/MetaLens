@@ -12,7 +12,7 @@ Requirements for running the pre-built MetaLens application and, separately, for
 | 📦 Use case | ✅ Requirement |
 |---|---|
 | **Run the compiled app** | Windows 10/11 (64-bit) or a modern Linux distro — nothing else |
-| **Build from source** | Python 3.13, Node.js 22.13+, npm 10+ |
+| **Build from source** | Python 3.13, Node.js 22.13+ (24 LTS recommended, used by CI), npm 10+ |
 
 ---
 
