@@ -24,7 +24,7 @@ module.exports = {
       path.join(__dirname, '..', 'python', 'dist',
         os.platform() === 'win32' ? 'metalens-sidecar.exe' : 'metalens-sidecar'),
     ],
-    ignore: [/node_modules/, /\.git/],
+    ignore: [/node_modules/, /\.git/, /^\/test($|\/)/],
   },
   makers: [
     {

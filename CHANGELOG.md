@@ -15,6 +15,81 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ---
 
+## [0.3.4] — 2026-10-05
+
+### Security
+- Resolved the two open Dependabot alerts on `extract-zip` ≤ 2.0.1 (GHSA-7pqw-9j4j-h8q3,
+  GHSA-jmr9-qjv8-65gv — no upstream patch exists) by upgrading Electron Forge to 8.x: its packager
+  (`@electron/packager` 20) replaced `extract-zip` with `@electron-internal/extract-zip`.
+  `npm audit` in `electron/`: 24 high-severity findings → 0.
+- Removed the `overrides` block from `electron/package.json` (`@electron/rebuild`, `tmp`,
+  `brace-expansion`): it only worked around the Forge 7 dependency tree. `tmp`, `tar` and
+  `@electron/rebuild` now resolve to safe versions naturally, and the old `brace-expansion` pin
+  (5.0.8) had itself become vulnerable (fixed in 5.0.12) while also being forced onto
+  `minimatch@3`, which expects the 1.x API.
+
+### Fixed
+- Closing the packaged app no longer leaves an orphaned `metalens-sidecar` process running (and
+  its localhost port open). The sidecar is a PyInstaller `--onefile` binary: a bootstrap process
+  that runs the real server as a child, and `kill()` only terminated the bootstrap. Shutdown now
+  terminates the whole process tree (`taskkill /T` on Windows, a signal to the process group on
+  Linux/macOS) via `electron/process-tree.js`. Verified on the packaged Windows app: 6 processes
+  while running → 0 after closing, and the port stops answering.
+
+### Dependencies
+- @electron-forge/cli and maker-deb / maker-rpm / maker-squirrel / maker-zip (dev): 7.11.2 → 8.0.1
+  (major; requires Node.js ≥ 22.13, pulls in `electron-installer-debian` / `-redhat` 4.0.0)
+  - Linux packages were built on GitHub Actions (Ubuntu) with Node 22 and 24 and diffed against the
+    Forge 7 baseline: same file names and identical file lists in the `.deb` and `.rpm`, and the
+    `.deb` keeps its `~beta` version convention.
+  - `electron-installer-debian` 4.0.0 builds the `.deb` with `dpkg-deb --root-owner-group` (no
+    fakeroot) and xz compression (~3% smaller), and both installers refresh the default package
+    dependencies for modern distros: the `.deb` now depends on `libsecret-1-0` and `gvfs`,
+    recommends `libasound2t64` (Ubuntu 24.04) and suggests `gnome-keyring`; the `.rpm` now requires
+    `libsecret` and `(libdrm or libdrm2)` (openSUSE).
+  - Windows: `electron-forge make` verified with Node 22 and 24; the installer's internal version
+    (file name, `RELEASES`, `.nuspec`) is consistent and the packaged app starts, serves the
+    sidecar API and reads/writes a real PDF.
+- pypdf: 6.18.1 → 6.19.0
+- uvicorn: 0.53.0 → 0.54.0
+- lucide-react: 1.46.0 → 1.48.0
+- vite (dev): 8.3.0 → 8.3.1
+- electron (dev): 44.3.0 → 44.4.5
+- Verified at runtime with the pinned versions: fresh Python 3.13 venv + live sidecar smoke test on
+  `/health`, `/read`, `/write`, `/delete` and an invalid path with a real PDF (pypdf 6.19.0,
+  uvicorn 0.54.0); frontend build, `verify-icons` (all 34 used icons present) and browser render
+  with no console errors, on both the production build and the vite dev server (lucide-react
+  1.48.0, vite 8.3.1); a real Electron dev run (sidecar spawn, window load, clean shutdown, no
+  errors) (electron 44.4.5). Combined check on the final `develop`: full suite 51 passed / 1 skipped.
+
+### CI/CD
+- Dependabot `schedule.interval` switched from `weekly` to `monthly` across all 4 ecosystems
+  (pip, electron npm, frontend npm, github-actions). Security-update PRs are unaffected —
+  Dependabot opens those immediately on CVE discovery regardless of `schedule.interval`.
+- `github/codeql-action` bumped 4.38.0 → 4.38.2.
+- GitHub Release notes are now the `CHANGELOG.md` section of the released version instead of
+  GitHub's auto-generated list of PR titles (which for a release PR only showed "Release X.Y.Z" and
+  was repeated twice in the v0.3.3 body). `scripts/changelog_notes.py` extracts the `## [X.Y.Z]`
+  section (without the Roadmap) and `release-stable` / `release-beta` publish it with
+  `body_path`, followed by a "Full Changelog" compare link. The stable pipeline fails in
+  `get-version`, before any build, when the version has no non-empty section; a beta falls back to
+  `[Unreleased]` and then to a short generic text so it never fails because of the notes. 11 tests
+  cover the extraction, the CLI and the integrity of the real changelog (suite: 62 passed / 1
+  skipped).
+- CI moved from Node 22 to Node 24 LTS (`actions/setup-node`, all jobs). Node 22 enters
+  maintenance-only and reaches end of life in April 2027; Electron Forge 7 could not complete
+  packaging under Node 24, Forge 8 can. Minimum supported Node.js for building from source stays
+  22.13+. `electron-winstaller` updated 5.4.0 → 5.4.4 (within the existing range): 5.4.1 fixed a
+  call to `fs.existsSync(undefined)` that raised a `DEP0187` deprecation warning on Node 24 while
+  creating the Squirrel installer.
+- `test-electron` now runs the Electron unit tests (`npm test` in `electron/`, `node --test`),
+  starting with the process-tree shutdown test. It fails if the old `kill()` behavior returns.
+- Bumped `VERSION` to `0.3.4` on `develop` right after the `0.3.3` stable promotion, so that
+  further pushes to `develop` (even CI/config-only ones) build a new `0.3.4-beta.N` instead of
+  re-publishing orphan prereleases under the already-shipped `0.3.3`.
+
+---
+
 ## [0.3.3] — 2026-09-19
 
 ### CI/CD

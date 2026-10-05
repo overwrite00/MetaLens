@@ -43,7 +43,7 @@ Before contributing, please review this guide and our [Code of Conduct](./CODE_O
 ### Prerequisites
 
 - **Python**: 3.13 (see [REQUIREMENTS.md](./docs/REQUIREMENTS.md))
-- **Node.js**: 20+
+- **Node.js**: 22.13+ (24 LTS recommended, used by CI)
 - **npm**: 10+
 - **Git**
 
@@ -179,6 +179,15 @@ MetaLens uses `MAJOR.MINOR.PATCH`, with `python/config.py` → `VERSION` as the 
 
 If your change bumps the version, update all four locations: `python/config.py`, `CHANGELOG.md`, `electron/package.json`, `frontend/package.json`.
 
+### Release notes come from the changelog
+
+The body of every GitHub Release is the `CHANGELOG.md` section of that exact version, extracted by `scripts/changelog_notes.py` (the `Roadmap` subsection is left out):
+
+- **Stable** (`main`): needs a non-empty `## [X.Y.Z] — date` section. The pipeline fails before building anything if it is missing, so write the notes before promoting.
+- **Beta** (`develop`): uses the `## [X.Y.Z]` section if it exists, otherwise `## [Unreleased]`, otherwise a short generic text.
+
+Preview what a release will say with `python scripts/changelog_notes.py X.Y.Z`.
+
 ---
 
 ## 🔧 Dependency Updates
@@ -221,5 +230,5 @@ Thank you for contributing to MetaLens! Your efforts help make file metadata man
 
 ---
 
-*Last updated: 2026-08-03*
+*Last updated: 2026-10-05*
 *← [Code of Conduct](./CODE_OF_CONDUCT.md) | [Security →](./SECURITY.md)*

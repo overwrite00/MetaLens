@@ -3,6 +3,7 @@ const path = require('path')
 const { spawn } = require('child_process')
 const net = require('net')
 const fs = require('fs')
+const { spawnTree, killProcessTree } = require('./process-tree')
 
 // ─────────────────────── Windows/Squirrel install & update events ────────────
 // Squirrel (electron-forge maker-squirrel) launches the app with special flags
@@ -86,7 +87,7 @@ async function startSidecar() {
   }
 
   return new Promise((resolve, reject) => {
-    sidecarProcess = spawn(sidecarBin, sidecarArgs, {
+    sidecarProcess = spawnTree(sidecarBin, sidecarArgs, {
       env: { ...process.env },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
@@ -112,7 +113,7 @@ async function startSidecar() {
 
 function stopSidecar() {
   if (sidecarProcess) {
-    sidecarProcess.kill()
+    killProcessTree(sidecarProcess)
     sidecarProcess = null
   }
 }
