@@ -303,6 +303,7 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           path: artifacts
@@ -313,12 +314,27 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Pin the release-notes comparison base to the release published just before this
-          # one (previous beta or last stable). Left to itself GitHub picks the base
-          # heuristically and sometimes lists dozens of unrelated, older PRs.
+          # Base of the "Full Changelog" compare link: the release published just before this
+          # one (previous beta or last stable).
           PREV=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName             --jq '[.[] | select(.tagName != "v${{ needs.get-version-beta.outputs.beta_version }}")][0].tagName // empty')
           echo "previous_tag=$PREV" >> "$GITHUB_OUTPUT"
-          echo "Release notes base: ${PREV:-<none, GitHub default>}"
+          echo "Compare base: ${PREV:-<none>}"
+      - name: Build release notes from CHANGELOG.md
+        env:
+          BASE_VERSION: ${{ needs.get-version-beta.outputs.base_version }}
+          BETA_VERSION: ${{ needs.get-version-beta.outputs.beta_version }}
+          PREV: ${{ steps.prev.outputs.previous_tag }}
+        run: |
+          # Notes of a beta live under [BASE_VERSION] if the section already exists, otherwise
+          # under [Unreleased]; never fail a beta because the notes are missing.
+          python3 scripts/changelog_notes.py "$BASE_VERSION" --allow-unreleased \
+            --fallback "Beta build $BETA_VERSION from develop. See CHANGELOG.md for the changes in progress." \
+            --output release-notes.md
+          if [ -n "$PREV" ]; then
+            printf '\n**Full Changelog**: https://github.com/%s/compare/%s...v%s\n' \
+              "$GITHUB_REPOSITORY" "$PREV" "$BETA_VERSION" >> release-notes.md
+          fi
+          cat release-notes.md
       - name: Create beta GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
@@ -327,8 +343,8 @@ jobs:
           name: MetaLens v${{ needs.get-version-beta.outputs.beta_version }} (beta)
           draft: false
           prerelease: true
-          generate_release_notes: true
-          previous_tag: ${{ steps.prev.outputs.previous_tag }}
+          body_path: release-notes.md
+          generate_release_notes: false
           make_latest: false
           files: |
             artifacts/windows-installer-beta/**
@@ -351,6 +367,12 @@ jobs:
           VERSION=$(grep -oP 'VERSION\s*=\s*"\K[^"]+' python/config.py)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Building MetaLens v$VERSION"
+      - name: Verify CHANGELOG.md has release notes for this version
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          # Fail fast, before the long builds: the release body is this CHANGELOG section.
+          python3 scripts/changelog_notes.py "$VERSION" > /dev/null
 
   find-latest-beta:
     if: github.ref == 'refs/heads/main'
@@ -541,6 +563,7 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           path: artifacts
@@ -551,12 +574,24 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Pin the release-notes comparison base to the last published stable release
-          # (betas excluded). Left to itself GitHub picks the base heuristically and has
-          # listed dozens of unrelated, older PRs (e.g. v0.2.10, v0.3.2 compared to v0.2.0).
+          # Base of the "Full Changelog" compare link: the last published stable release
+          # (betas excluded).
           PREV=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --exclude-pre-releases --json tagName             --jq '[.[] | select(.tagName != "v${{ needs.get-version.outputs.version }}")][0].tagName // empty')
           echo "previous_tag=$PREV" >> "$GITHUB_OUTPUT"
-          echo "Release notes base: ${PREV:-<none, GitHub default>}"
+          echo "Compare base: ${PREV:-<none>}"
+      - name: Build release notes from CHANGELOG.md
+        env:
+          VERSION: ${{ needs.get-version.outputs.version }}
+          PREV: ${{ steps.prev.outputs.previous_tag }}
+        run: |
+          # The stable release body is the CHANGELOG section of exactly this version
+          # (get-version already verified that it exists and is not empty).
+          python3 scripts/changelog_notes.py "$VERSION" --output release-notes.md
+          if [ -n "$PREV" ]; then
+            printf '\n**Full Changelog**: https://github.com/%s/compare/%s...v%s\n' \
+              "$GITHUB_REPOSITORY" "$PREV" "$VERSION" >> release-notes.md
+          fi
+          cat release-notes.md
       - name: Create stable GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
@@ -565,8 +600,8 @@ jobs:
           name: MetaLens v${{ needs.get-version.outputs.version }}
           draft: false
           prerelease: false
-          generate_release_notes: true
-          previous_tag: ${{ steps.prev.outputs.previous_tag }}
+          body_path: release-notes.md
+          generate_release_notes: false
           make_latest: true
           files: |
             artifacts/windows-installer-stable/**

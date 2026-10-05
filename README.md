@@ -175,7 +175,7 @@ React Frontend (Vite + TailwindCSS)
 
 ## 📊 Test Suite
 
-✅ **52 automated tests** covering handlers (including the hachoir fallback), the handler registry, and path-security validation.
+✅ **63 automated tests** covering handlers (including the hachoir fallback), the handler registry, path-security validation, and the release-notes extraction from the changelog.
 
 ```bash
 pytest python/tests/ -v
