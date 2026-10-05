@@ -13,7 +13,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - [ ] **Batch Edit** — Apply a field change to multiple selected files at once
 - [ ] **Search/Filter Bar** — Filter the file list by name or extension
 
+### Security
+- Resolved the two open Dependabot alerts on `extract-zip` ≤ 2.0.1 (GHSA-7pqw-9j4j-h8q3,
+  GHSA-jmr9-qjv8-65gv — no upstream patch exists) by upgrading Electron Forge to 8.x: its packager
+  (`@electron/packager` 20) replaced `extract-zip` with `@electron-internal/extract-zip`.
+  `npm audit` in `electron/`: 24 high-severity findings → 0.
+- Removed the `overrides` block from `electron/package.json` (`@electron/rebuild`, `tmp`,
+  `brace-expansion`): it only worked around the Forge 7 dependency tree. `tmp`, `tar` and
+  `@electron/rebuild` now resolve to safe versions naturally, and the old `brace-expansion` pin
+  (5.0.8) had itself become vulnerable (fixed in 5.0.12) while also being forced onto
+  `minimatch@3`, which expects the 1.x API.
+
 ### Dependencies
+- @electron-forge/cli and maker-deb / maker-rpm / maker-squirrel / maker-zip (dev): 7.11.2 → 8.0.1
+  (major; requires Node.js ≥ 22.13, pulls in `electron-installer-debian` / `-redhat` 4.0.0)
 - pypdf: 6.18.1 → 6.19.0
 - uvicorn: 0.53.0 → 0.54.0
 - lucide-react: 1.46.0 → 1.48.0
