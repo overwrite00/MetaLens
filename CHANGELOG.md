@@ -24,6 +24,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
   (5.0.8) had itself become vulnerable (fixed in 5.0.12) while also being forced onto
   `minimatch@3`, which expects the 1.x API.
 
+### Fixed
+- Closing the packaged app no longer leaves an orphaned `metalens-sidecar` process running (and
+  its localhost port open). The sidecar is a PyInstaller `--onefile` binary: a bootstrap process
+  that runs the real server as a child, and `kill()` only terminated the bootstrap. Shutdown now
+  terminates the whole process tree (`taskkill /T` on Windows, a signal to the process group on
+  Linux/macOS) via `electron/process-tree.js`. Verified on the packaged Windows app: 6 processes
+  while running → 0 after closing, and the port stops answering.
+
 ### Dependencies
 - @electron-forge/cli and maker-deb / maker-rpm / maker-squirrel / maker-zip (dev): 7.11.2 → 8.0.1
   (major; requires Node.js ≥ 22.13, pulls in `electron-installer-debian` / `-redhat` 4.0.0)
@@ -55,6 +63,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
   (pip, electron npm, frontend npm, github-actions). Security-update PRs are unaffected —
   Dependabot opens those immediately on CVE discovery regardless of `schedule.interval`.
 - `github/codeql-action` bumped 4.38.0 → 4.38.2.
+- `test-electron` now runs the Electron unit tests (`npm test` in `electron/`, `node --test`),
+  starting with the process-tree shutdown test. It fails if the old `kill()` behavior returns.
 - Bumped `VERSION` to `0.3.4` on `develop` right after the `0.3.3` stable promotion, so that
   further pushes to `develop` (even CI/config-only ones) build a new `0.3.4-beta.N` instead of
   re-publishing orphan prereleases under the already-shipped `0.3.3`.
