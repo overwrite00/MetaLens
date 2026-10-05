@@ -27,6 +27,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 ### Dependencies
 - @electron-forge/cli and maker-deb / maker-rpm / maker-squirrel / maker-zip (dev): 7.11.2 → 8.0.1
   (major; requires Node.js ≥ 22.13, pulls in `electron-installer-debian` / `-redhat` 4.0.0)
+  - Linux packages were built on GitHub Actions (Ubuntu) with Node 22 and 24 and diffed against the
+    Forge 7 baseline: same file names and identical file lists in the `.deb` and `.rpm`, and the
+    `.deb` keeps its `~beta` version convention.
+  - `electron-installer-debian` 4.0.0 builds the `.deb` with `dpkg-deb --root-owner-group` (no
+    fakeroot) and xz compression (~3% smaller), and both installers refresh the default package
+    dependencies for modern distros: the `.deb` now depends on `libsecret-1-0` and `gvfs`,
+    recommends `libasound2t64` (Ubuntu 24.04) and suggests `gnome-keyring`; the `.rpm` now requires
+    `libsecret` and `(libdrm or libdrm2)` (openSUSE).
+  - Windows: `electron-forge make` verified with Node 22 and 24; the installer's internal version
+    (file name, `RELEASES`, `.nuspec`) is consistent and the packaged app starts, serves the
+    sidecar API and reads/writes a real PDF.
 - pypdf: 6.18.1 → 6.19.0
 - uvicorn: 0.53.0 → 0.54.0
 - lucide-react: 1.46.0 → 1.48.0
