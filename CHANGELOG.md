@@ -67,6 +67,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
   (pip, electron npm, frontend npm, github-actions). Security-update PRs are unaffected —
   Dependabot opens those immediately on CVE discovery regardless of `schedule.interval`.
 - `github/codeql-action` bumped 4.38.0 → 4.38.2.
+- GitHub Release notes are now the `CHANGELOG.md` section of the released version instead of
+  GitHub's auto-generated list of PR titles (which for a release PR only showed "Release X.Y.Z" and
+  was repeated twice in the v0.3.3 body). `scripts/changelog_notes.py` extracts the `## [X.Y.Z]`
+  section (without the Roadmap) and `release-stable` / `release-beta` publish it with
+  `body_path`, followed by a "Full Changelog" compare link. The stable pipeline fails in
+  `get-version`, before any build, when the version has no non-empty section; a beta falls back to
+  `[Unreleased]` and then to a short generic text so it never fails because of the notes. 11 tests
+  cover the extraction, the CLI and the integrity of the real changelog (suite: 62 passed / 1
+  skipped).
 - CI moved from Node 22 to Node 24 LTS (`actions/setup-node`, all jobs). Node 22 enters
   maintenance-only and reaches end of life in April 2027; Electron Forge 7 could not complete
   packaging under Node 24, Forge 8 can. Minimum supported Node.js for building from source stays
