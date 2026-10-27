@@ -17,7 +17,16 @@ from __future__ import annotations
 
 import os
 import sys
+import shutil
+import stat
+import tempfile
+from threading import RLock
+from typing import Callable
 from pathlib import Path
+
+# Metadata mutations are infrequent. One reentrant lock also permits nested
+# transactions without acquiring path locks in inconsistent orders.
+_WRITE_LOCK = RLock()
 
 __all__ = [
     "validate_file_path",
@@ -30,6 +39,10 @@ __all__ = [
 class PathSecurityError(Exception):
     """Raised when path validation fails."""
     pass
+
+
+class _RecoveryError(PathSecurityError):
+    """The original backup must be retained for manual recovery."""
 
 
 def validate_file_path(path_str: str, must_exist: bool = True) -> Path:
@@ -64,8 +77,8 @@ def validate_file_path(path_str: str, must_exist: bool = True) -> Path:
     # Step 1: Parse and resolve path
     # .resolve() handles: normalization, ~, .., symlink resolution
     try:
-        path = Path(path_str).resolve(strict=False)
-    except (OSError, ValueError) as e:
+        path = Path(path_str).expanduser().resolve(strict=False)
+    except (OSError, ValueError, RuntimeError) as e:
         raise PathSecurityError(f"Invalid path '{path_str}': {e}") from e
 
     # Step 2: Verify it's an absolute path
@@ -122,8 +135,8 @@ def validate_directory_path(path_str: str, must_exist: bool = True) -> Path:
         PathSecurityError: If path is invalid or not a directory
     """
     try:
-        path = Path(path_str).resolve(strict=False)
-    except (OSError, ValueError) as e:
+        path = Path(path_str).expanduser().resolve(strict=False)
+    except (OSError, ValueError, RuntimeError) as e:
         raise PathSecurityError(f"Invalid path '{path_str}': {e}") from e
 
     if not path.is_absolute():
@@ -157,7 +170,7 @@ def validate_directory_path(path_str: str, must_exist: bool = True) -> Path:
 
 def secure_atomic_write(
     target_path: Path,
-    write_fn: callable,
+    write_fn: Callable[[Path], None],
     temp_suffix: str = ".ml_tmp",
 ) -> None:
     """
@@ -165,11 +178,11 @@ def secure_atomic_write(
 
     This function:
     1. Validates the target path
-    2. Creates a temporary file in the same directory (atomic on POSIX/Windows)
+        2. Creates a private temporary directory on the same filesystem
     3. Calls write_fn(temp_path) to write modified content
-    4. Atomically replaces target with temp (using os.replace)
+        4. Replaces target with temp (ReplaceFileW on Windows, os.replace on Unix)
     5. Cleans up temp file on error
-    6. On Unix: uses O_NOFOLLOW to prevent symlink-following during write
+        6. Rejects replaced targets and non-regular temporary files
 
     Args:
         target_path: Path object of the file to write (must exist and be writable)
@@ -186,57 +199,83 @@ def secure_atomic_write(
         ...         f.write(b"new content")
         >>> secure_atomic_write(Path("/home/user/file.txt"), writer)
     """
-    # Validate target path
     target = validate_file_path(str(target_path), must_exist=True)
+    if not temp_suffix or any(c in temp_suffix for c in ("/", "\\")):
+        raise ValueError("Temporary suffix must not contain path separators")
+    with _WRITE_LOCK:
+        if not os.access(target, os.W_OK):
+            raise PathSecurityError(f"No write permission for: {target}")
+        original = _file_identity(target)
+        original_stat = target.stat()
+        # An exclusively created private directory protects the entire callback,
+        # including libraries which close/reopen the temporary file by pathname.
+        directory = Path(tempfile.mkdtemp(prefix=".metalens-", dir=target.parent))
+        cleanup = True
+        try:
+            temp_path = directory / (target.stem + temp_suffix + target.suffix)
+            shutil.copy2(target, temp_path)
+            write_fn(temp_path)
+            if not stat.S_ISREG(temp_path.lstat().st_mode):
+                raise PathSecurityError("Temporary file is not a regular file")
+            if sys.platform != "win32":
+                _preserve_posix_owner(temp_path, original_stat)
+            if _file_identity(target) != original:
+                raise PathSecurityError("Target changed during metadata write")
+            with temp_path.open("r+b") as stream:
+                os.fsync(stream.fileno())
+            _replace_file(temp_path, target)
+        except _RecoveryError:
+            cleanup = False
+            raise
+        finally:
+            if cleanup:
+                shutil.rmtree(directory)
 
-    # Check write permission
-    if not os.access(target, os.W_OK):
-        raise PathSecurityError(f"No write permission for: {target}")
 
-    # Create temp file path in same directory (ensures same filesystem)
-    temp_path = target.parent / f"{target.stem}{temp_suffix}{target.suffix}"
+def _preserve_posix_owner(path: Path, original) -> None:
+    current = path.stat()
+    if (current.st_uid, current.st_gid) != (original.st_uid, original.st_gid):
+        # copy2 does not preserve ownership. Refuse the mutation if the caller
+        # cannot restore it, rather than silently changing the file's owner.
+        os.chown(path, original.st_uid, original.st_gid)
+        os.chmod(path, stat.S_IMODE(original.st_mode))
 
+
+def _replace_file(replacement: Path, target: Path) -> None:
+    if sys.platform != "win32":
+        os.replace(replacement, target)
+        return
+    # ReplaceFile preserves the original DACL, creation time, encryption and
+    # named streams. os.replace after copy2 would discard those on Windows.
+    backup = replacement.parent / "original-backup"
     try:
-        # Step 1: Copy original to temp (preserves metadata)
-        import shutil
-        shutil.copy2(target, temp_path)
-
-        # Step 2: On Unix, open temp with O_NOFOLLOW to prevent symlink tricks
-        # (Note: This is for defense-in-depth; temp was just created, so unlikely to be symlink)
-        if sys.platform != "win32":
-            # Verify temp is not a symlink
-            if temp_path.is_symlink():
-                raise PathSecurityError(
-                    f"Temporary file became a symlink during creation: {temp_path}"
-                )
-
-        # Step 3: Call user's write function
-        write_fn(temp_path)
-
-        # Step 4: Verify temp still exists and is not a symlink (sanity check)
-        if not temp_path.exists():
-            raise PathSecurityError(
-                f"Temporary file disappeared during write: {temp_path}"
-            )
-
-        if sys.platform != "win32" and temp_path.is_symlink():
-            raise PathSecurityError(
-                f"Temporary file became a symlink during write: {temp_path}"
-            )
-
-        # Step 5: Atomic replace (POSIX + Windows atomic)
-        # os.replace() is atomic on both platforms
-        os.replace(temp_path, target)
-
-    except Exception as e:
-        # Clean up temp file on error
-        if temp_path.exists():
+        _windows_replace(target, replacement, backup)
+    except OSError:
+        if backup.exists():
             try:
-                temp_path.unlink(missing_ok=True)
-            except Exception as cleanup_err:
-                # Log but don't hide original error
-                pass
+                os.replace(backup, target)
+            except OSError as exc:
+                raise _RecoveryError(f"Replacement and rollback failed; original retained at {backup}") from exc
         raise
+
+
+def _windows_replace(target: Path, replacement: Path, backup: Path) -> None:
+    import ctypes
+    from ctypes import wintypes
+    replace = ctypes.WinDLL("kernel32", use_last_error=True).ReplaceFileW
+    replace.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.LPCWSTR,
+                        wintypes.DWORD, wintypes.LPVOID, wintypes.LPVOID]
+    replace.restype = wintypes.BOOL
+    # Do not ignore ACL/stream merge errors: preserving them is required.
+    if not replace(str(target), str(replacement), str(backup), 0, None, None):
+        raise ctypes.WinError(ctypes.get_last_error())
+
+
+def _file_identity(path: Path) -> tuple:
+    st = path.lstat()
+    if not stat.S_ISREG(st.st_mode):
+        raise PathSecurityError("Target changed to a non-regular file")
+    return st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns
 
 
 def normalize_path(path_str: str) -> str:
@@ -255,6 +294,6 @@ def normalize_path(path_str: str) -> str:
         PathSecurityError: If path cannot be resolved
     """
     try:
-        return str(Path(path_str).resolve(strict=False))
-    except (OSError, ValueError) as e:
+        return str(Path(path_str).expanduser().resolve(strict=False))
+    except (OSError, ValueError, RuntimeError) as e:
         raise PathSecurityError(f"Cannot normalize path '{path_str}': {e}") from e

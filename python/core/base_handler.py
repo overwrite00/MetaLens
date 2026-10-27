@@ -1,7 +1,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from pathlib import Path
-import shutil
+from core.path_security import secure_atomic_write
 
 from core.models import MetadataField, MetadataRecord
 
@@ -26,18 +26,13 @@ class BaseMetadataHandler(ABC):
     def can_handle(self, path: Path) -> bool:
         return path.suffix.lower() in self.EXTENSIONS
 
+    def writable_field(self, path: Path, key: str) -> MetadataField | None:
+        """Server-owned schema for known writable fields absent from a file."""
+        return None
+
     def _atomic_write(self, path: Path, write_fn) -> None:
         """Execute write_fn on a temp copy, then atomically replace original."""
-        tmp = path.with_name(path.stem + ".ml_tmp" + path.suffix)
-        try:
-            shutil.copy2(path, tmp)
-            write_fn(tmp)
-            import os
-            os.replace(tmp, path)
-        except Exception:
-            if tmp.exists():
-                tmp.unlink(missing_ok=True)
-            raise
+        secure_atomic_write(path, write_fn)
 
     def _make_record(self, path: Path, **kwargs) -> MetadataRecord:
         stat = path.stat()

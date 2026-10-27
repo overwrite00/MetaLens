@@ -15,7 +15,8 @@ export default function App() {
   const [fileB, setFileB]               = useState(null)
   const [showAbout, setShowAbout]       = useState(false)
   const [undoMsg, setUndoMsg]           = useState(null)
-  const { push: undoPush, pop: undoPop, canUndo } = useUndoStack()
+  const { push: undoPush, undo, canUndo, runExclusive, busy } = useUndoStack()
+  const [reloadKey, setReloadKey] = useState(0)
 
   // Splitter widths (px)
   const [leftW, setLeftW]   = useState(220)
@@ -36,28 +37,23 @@ export default function App() {
       window.electronAPI.removeAllListeners('menu-undo')
       window.electronAPI.removeAllListeners('menu-about')
     }
-  }, [])
+  }, [selectedFile, undo, canUndo])
 
   async function openFolderDialog() {
     if (!window.electronAPI) return
     const path = await window.electronAPI.openFolderDialog()
-    if (path) setCurrentPath(path)
+    if (path) handleSelectPath(path)
   }
 
   // ── Undo ──────────────────────────────────────────────────────────────────
   async function handleUndo() {
-    if (!canUndo()) return
-    const entry = undoPop()
-    if (!entry) return
     try {
-      await metalens.write(entry.filePath, entry.fields)
+      const entry = await undo(entry => metalens.write(entry.filePath, entry.fields))
+      if (!entry) return
       setUndoMsg('Undo applied')
       setTimeout(() => setUndoMsg(null), 2000)
-      if (selectedFile === entry.filePath) {
-        // Trigger DetailPanel reload by toggling selectedFile
-        setSelectedFile(null)
-        requestAnimationFrame(() => setSelectedFile(entry.filePath))
-      }
+      // Refresh the current view even if selection changed while undo was queued.
+      setReloadKey(value => value + 1)
     } catch (e) {
       setUndoMsg(`Undo failed: ${e.message}`)
       setTimeout(() => setUndoMsg(null), 3000)
@@ -87,7 +83,13 @@ export default function App() {
 
   function handleSelectFile(path) {
     setSelectedFile(path)
-    if (path !== fileB) setFileB(null)
+    setFileB(null)
+  }
+
+  function handleSelectPath(path) {
+    setCurrentPath(path)
+    setSelectedFile(null)
+    setFileB(null)
   }
 
   return (
@@ -106,7 +108,7 @@ export default function App() {
             <FolderOpen size={12} /> Open Folder
           </Button>
           <Button variant="ghost" size="xs" onClick={handleUndo}
-            disabled={!canUndo()} title="Undo last write">
+            disabled={!canUndo() || busy} title="Undo last write">
             <RotateCcw size={12} /> Undo
           </Button>
           {fileB && (
@@ -130,7 +132,7 @@ export default function App() {
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Left: Folder tree */}
         <div style={{ width: leftW, flexShrink: 0 }} className="min-h-0 overflow-hidden">
-          <FolderPanel onSelectPath={setCurrentPath} />
+          <FolderPanel onSelectPath={handleSelectPath} />
         </div>
 
         {/* Resize handle L */}
@@ -154,6 +156,9 @@ export default function App() {
             filePath={selectedFile}
             filePathB={fileB}
             onUndoPush={undoPush}
+            runExclusive={runExclusive}
+            mutationBusy={busy}
+            reloadKey={reloadKey}
           />
         </div>
       </div>

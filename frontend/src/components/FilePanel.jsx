@@ -49,24 +49,19 @@ export function FilePanel({ currentPath, onSelectFile, onSelectTwo }) {
   const [sortAsc, setSortAsc] = useState(true)
 
   useEffect(() => {
-    if (!currentPath) return
-    loadDir(currentPath)
-  }, [currentPath])
-
-  async function loadDir(path) {
-    setLoading(true)
+    let cancelled = false
+    setLoading(Boolean(currentPath))
     setError(null)
+    setItems([])
     setSelected(new Set())
-    try {
-      const data = await metalens.list(path)
-      setItems(data.items.filter(i => !i.is_dir))
-    } catch (e) {
-      setError(e.message)
-      setItems([])
-    } finally {
-      setLoading(false)
+    if (currentPath) {
+      metalens.list(currentPath)
+        .then(data => { if (!cancelled) setItems(data.items.filter(i => !i.is_dir)) })
+        .catch(e => { if (!cancelled) setError(e.message) })
+        .finally(() => { if (!cancelled) setLoading(false) })
     }
-  }
+    return () => { cancelled = true }
+  }, [currentPath])
 
   function toggleSort(key) {
     if (sortKey === key) setSortAsc(a => !a)
@@ -77,21 +72,20 @@ export function FilePanel({ currentPath, onSelectFile, onSelectTwo }) {
     let va = a[sortKey] ?? '', vb = b[sortKey] ?? ''
     if (typeof va === 'string') va = va.toLowerCase()
     if (typeof vb === 'string') vb = vb.toLowerCase()
+    if (va === vb) return 0
     return sortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1)
   })
 
   function handleClick(item, e) {
     const path = item.path
-    setSelected(prev => {
-      const next = new Set(e.shiftKey || e.ctrlKey || e.metaKey ? prev : [])
-      if (next.has(path)) next.delete(path)
-      else next.add(path)
-      const arr = [...next]
-      if (arr.length === 1) onSelectFile(arr[0])
-      else if (arr.length === 2) onSelectTwo(arr[0], arr[1])
-      else if (arr.length === 0) onSelectFile(null)
-      return next
-    })
+    const next = new Set(e.shiftKey || e.ctrlKey || e.metaKey ? selected : [])
+    if (next.has(path)) next.delete(path)
+    else next.add(path)
+    const arr = [...next]
+    if (arr.length === 1) onSelectFile(arr[0])
+    else if (arr.length === 2) onSelectTwo(arr[0], arr[1])
+    else onSelectFile(null)
+    setSelected(next)
   }
 
   return (

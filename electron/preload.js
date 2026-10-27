@@ -1,8 +1,15 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
+const subscribe = (channel, callback) => {
+  const listener = (_event, ...args) => callback(...args)
+  ipcRenderer.on(channel, listener)
+  return () => ipcRenderer.removeListener(channel, listener)
+}
+
 contextBridge.exposeInMainWorld('electronAPI', {
   // Sidecar port
   getPort: () => ipcRenderer.invoke('get-port'),
+  getSidecarConnection: () => ipcRenderer.invoke('get-sidecar-connection'),
 
   // Packaged app version (reflects beta suffix, unlike the sidecar's /health version)
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
@@ -19,10 +26,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   homeDir:     () => ipcRenderer.invoke('home-dir'),
 
   // Menu events → React handlers
-  onMenuOpenFolder: (cb) => ipcRenderer.on('menu-open-folder', cb),
-  onMenuUndo:       (cb) => ipcRenderer.on('menu-undo', cb),
-  onMenuAbout:      (cb) => ipcRenderer.on('menu-about', cb),
+  onMenuOpenFolder: (cb) => subscribe('menu-open-folder', cb),
+  onMenuUndo:       (cb) => subscribe('menu-undo', cb),
+  onMenuAbout:      (cb) => subscribe('menu-about', cb),
 
   // Cleanup
-  removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),
+  removeAllListeners: (channel) => {
+    if (['menu-open-folder', 'menu-undo', 'menu-about'].includes(channel)) ipcRenderer.removeAllListeners(channel)
+  },
 })
