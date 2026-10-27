@@ -260,15 +260,14 @@ def _replace_file(replacement: Path, target: Path) -> None:
 
 
 def _windows_replace(target: Path, replacement: Path, backup: Path) -> None:
-    import ctypes
-    from ctypes import wintypes
-    replace = ctypes.WinDLL("kernel32", use_last_error=True).ReplaceFileW
+    from ctypes import WinDLL, WinError, get_last_error, wintypes
+    replace = WinDLL("kernel32", use_last_error=True).ReplaceFileW
     replace.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.LPCWSTR,
                         wintypes.DWORD, wintypes.LPVOID, wintypes.LPVOID]
     replace.restype = wintypes.BOOL
     # Do not ignore ACL/stream merge errors: preserving them is required.
     if not replace(str(target), str(replacement), str(backup), 0, None, None):
-        raise ctypes.WinError(ctypes.get_last_error())
+        raise WinError(get_last_error())
 
 
 def _file_identity(path: Path) -> tuple:

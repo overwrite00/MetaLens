@@ -6,7 +6,7 @@ import sys
 import pytest
 
 from core.models import MetadataField
-from core.path_security import secure_atomic_write, validate_file_path
+import core.path_security as security
 
 
 def test_atomic_write_preserves_existing_neighbor(tmp_path):
@@ -14,7 +14,7 @@ def test_atomic_write_preserves_existing_neighbor(tmp_path):
     neighbor = tmp_path / "original.ml_tmp.txt"
     target.write_text("original")
     neighbor.write_text("user data")
-    secure_atomic_write(target, lambda p: p.write_text("changed"))
+    security.secure_atomic_write(target, lambda p: p.write_text("changed"))
     assert target.read_text() == "changed"
     assert neighbor.read_text() == "user data"
 
@@ -26,7 +26,7 @@ def test_atomic_write_detects_concurrent_change(tmp_path):
         p.write_text("new")
         target.write_text("external change")
     with pytest.raises(Exception, match="changed"):
-        secure_atomic_write(target, writer)
+        security.secure_atomic_write(target, writer)
     assert target.read_text() == "external change"
 
 
@@ -35,7 +35,7 @@ def test_expand_home(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / "file.txt"
     target.write_text("ok")
-    assert validate_file_path("~/file.txt") == target.resolve()
+    assert security.validate_file_path("~/file.txt") == target.resolve()
 
 
 def test_pdf_write_preserves_other_metadata(tmp_path):
@@ -169,14 +169,13 @@ def test_media_save_failure_preserves_original(tmp_path, monkeypatch, name, exte
 
 
 def test_atomic_replace_failure_preserves_original_and_cleans(tmp_path, monkeypatch):
-    import core.path_security as security
     target = tmp_path / "file.txt"
     target.write_text("original")
     def fail_replace(*args):
         raise PermissionError("locked file")
     monkeypatch.setattr(security, "_replace_file", fail_replace)
     with pytest.raises(PermissionError, match="locked"):
-        secure_atomic_write(target, lambda p: p.write_text("new"))
+        security.secure_atomic_write(target, lambda p: p.write_text("new"))
     assert target.read_text() == "original"
     assert list(tmp_path.iterdir()) == [target]
 
@@ -291,7 +290,7 @@ def test_windows_atomic_write_preserves_named_streams(tmp_path):
     target.write_text("original")
     stream = Path(str(target) + ":private")
     stream.write_text("preserve")
-    secure_atomic_write(target, lambda p: p.write_text("changed"))
+    security.secure_atomic_write(target, lambda p: p.write_text("changed"))
     assert target.read_text() == "changed"
     assert stream.read_text() == "preserve"
 
@@ -299,7 +298,6 @@ def test_windows_atomic_write_preserves_named_streams(tmp_path):
 @pytest.mark.skipif(sys.platform != "win32", reason="ReplaceFileW recovery is Windows-specific")
 def test_windows_replace_recovers_original_after_partial_failure(tmp_path, monkeypatch):
     import os
-    import core.path_security as security
     target = tmp_path / "file.txt"
     target.write_text("original")
     def partial_failure(original, replacement, backup):
@@ -307,7 +305,7 @@ def test_windows_replace_recovers_original_after_partial_failure(tmp_path, monke
         raise OSError("simulated ReplaceFileW error 1177")
     monkeypatch.setattr(security, "_windows_replace", partial_failure)
     with pytest.raises(OSError, match="1177"):
-        secure_atomic_write(target, lambda p: p.write_text("changed"))
+        security.secure_atomic_write(target, lambda p: p.write_text("changed"))
     assert target.read_text() == "original"
     assert list(tmp_path.iterdir()) == [target]
 
@@ -329,13 +327,12 @@ def test_windows_atomic_write_preserves_protected_dacl(tmp_path):
             security, win32security.SDDL_REVISION_1, win32security.DACL_SECURITY_INFORMATION,
         )
     before = descriptor()
-    secure_atomic_write(target, lambda p: p.write_text("changed"))
+    security.secure_atomic_write(target, lambda p: p.write_text("changed"))
     assert descriptor() == before
 
 
 def test_posix_owner_preservation_calls_chown_and_restores_mode(tmp_path, monkeypatch):
     from types import SimpleNamespace
-    import core.path_security as security
     target = tmp_path / "file.txt"
     target.write_text("original")
     calls = []
@@ -348,7 +345,6 @@ def test_posix_owner_preservation_calls_chown_and_restores_mode(tmp_path, monkey
 
 def test_posix_owner_preservation_refuses_permission_failure(tmp_path, monkeypatch):
     from types import SimpleNamespace
-    import core.path_security as security
     target = tmp_path / "file.txt"
     target.write_text("original")
     def denied(*args):
@@ -364,6 +360,6 @@ def test_posix_atomic_write_preserves_real_owner(tmp_path):
     target = tmp_path / "file.txt"
     target.write_text("original")
     before = target.stat()
-    secure_atomic_write(target, lambda p: p.write_text("changed"))
+    security.secure_atomic_write(target, lambda p: p.write_text("changed"))
     after = target.stat()
     assert (after.st_uid, after.st_gid) == (before.st_uid, before.st_gid)
