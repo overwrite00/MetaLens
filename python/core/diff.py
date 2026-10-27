@@ -1,5 +1,4 @@
 from __future__ import annotations
-import hashlib
 
 from core.models import DiffResult, MetadataRecord
 
@@ -33,8 +32,4 @@ def compute_diff(record_a: MetadataRecord, record_b: MetadataRecord) -> DiffResu
 
 
 def _values_equal(a, b) -> bool:
-    if type(a) != type(b):
-        a, b = str(a), str(b)
-    if isinstance(a, bytes):
-        return hashlib.md5(a).digest() == hashlib.md5(b).digest()
-    return str(a).strip().lower() == str(b).strip().lower()
+    return type(a) is type(b) and a == b
