@@ -107,6 +107,13 @@ def test_exif_rational_roundtrip(tmp_path):
     assert piexif.load(str(target))["0th"][piexif.ImageIFD.XResolution] == (120, 1)
 
 
+@pytest.mark.parametrize("value,tag_type", [("1/0", 5), (str(2**40), 5), (-1, 5), (65536, 3), (-1, 1)])
+def test_exif_rejects_invalid_numeric_values(value, tag_type):
+    from core.handlers.image_handler import _encode_exif_value
+    with pytest.raises(ValueError):
+        _encode_exif_value(value, tag_type)
+
+
 @pytest.mark.parametrize("a,b", [("Alice", "alice"), (" text", "text"), (b"A", b"a")])
 def test_diff_preserves_case_and_whitespace(a, b):
     from core.diff import _values_equal
@@ -324,3 +331,39 @@ def test_windows_atomic_write_preserves_protected_dacl(tmp_path):
     before = descriptor()
     secure_atomic_write(target, lambda p: p.write_text("changed"))
     assert descriptor() == before
+
+
+def test_posix_owner_preservation_calls_chown_and_restores_mode(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    import core.path_security as security
+    target = tmp_path / "file.txt"
+    target.write_text("original")
+    calls = []
+    monkeypatch.setattr(security.os, "chown", lambda *args: calls.append(("chown", args)), raising=False)
+    monkeypatch.setattr(security.os, "chmod", lambda *args, **kwargs: calls.append(("chmod", args)))
+    original = SimpleNamespace(st_uid=12345, st_gid=23456, st_mode=0o100640)
+    security._preserve_posix_owner(target, original)
+    assert calls == [("chown", (target, 12345, 23456)), ("chmod", (target, 0o640))]
+
+
+def test_posix_owner_preservation_refuses_permission_failure(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    import core.path_security as security
+    target = tmp_path / "file.txt"
+    target.write_text("original")
+    def denied(*args):
+        raise PermissionError("Cannot preserve ownership")
+    monkeypatch.setattr(security.os, "chown", denied, raising=False)
+    with pytest.raises(PermissionError, match="ownership"):
+        security._preserve_posix_owner(target, SimpleNamespace(st_uid=12345, st_gid=23456, st_mode=0o100640))
+    assert target.read_text() == "original"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Real POSIX UID/GID preservation requires Unix")
+def test_posix_atomic_write_preserves_real_owner(tmp_path):
+    target = tmp_path / "file.txt"
+    target.write_text("original")
+    before = target.stat()
+    secure_atomic_write(target, lambda p: p.write_text("changed"))
+    after = target.stat()
+    assert (after.st_uid, after.st_gid) == (before.st_uid, before.st_gid)
