@@ -52,6 +52,40 @@ test('Squirrel handles install and errors without allowing normal bootstrap', ()
   assert.equal(handleSquirrelEvent({ quit() {} }, () => assert.fail(), { platform: 'win32', argv: ['exe'] }), false)
 })
 
+test('only the trusted main frame may write sanitized clipboard text', () => {
+  const url = 'file:///app/frontend/index.html'
+  const contents = new EventEmitter()
+  contents.mainFrame = { url }
+  contents.getURL = () => contents.mainFrame.url
+  contents.setWindowOpenHandler = () => {}
+  let request, check
+  contents.session = {
+    setPermissionRequestHandler: callback => { request = callback },
+    setPermissionCheckHandler: callback => { check = callback },
+  }
+  secureWindow({ webContents: contents, isDestroyed: () => false }, url)
+  const details = { requestingUrl: url, isMainFrame: true }
+  const permits = (sender, permission, info) => {
+    let result
+    request(sender, permission, allowed => { result = allowed }, info)
+    return result
+  }
+  assert.equal(permits(contents, 'clipboard-sanitized-write', details), true)
+  assert.equal(check(contents, 'clipboard-sanitized-write', 'file://', details), true)
+  for (const permission of ['clipboard-read', 'media', 'notifications', 'unknown']) {
+    assert.equal(permits(contents, permission, details), false)
+    assert.equal(check(contents, permission, 'file://', details), false)
+  }
+  for (const info of [undefined, { ...details, isMainFrame: false }, { ...details, requestingUrl: 'file:///other.html' }]) {
+    assert.equal(permits(contents, 'clipboard-sanitized-write', info), false)
+    assert.equal(check(contents, 'clipboard-sanitized-write', 'file://', info), false)
+  }
+  assert.equal(permits(null, 'clipboard-sanitized-write', details), false)
+  assert.equal(check(null, 'clipboard-sanitized-write', 'file://', details), false)
+  contents.mainFrame.url = 'https://attacker.example/'
+  assert.equal(permits(contents, 'clipboard-sanitized-write', details), false)
+})
+
 test('readiness authenticates health rather than accepting an arbitrary TCP listener', async t => {
   const server = http.createServer((request, response) => {
     assert.equal(request.headers.authorization, 'Bearer session-secret')

@@ -210,7 +210,7 @@ async function createWindow() {
     icon: path.join(__dirname, '..', 'frontend', 'public', 'icon.png'),
   })
 
-  secureWindow(mainWindow)
+  secureWindow(mainWindow, trustedURL)
   const isDev = !app.isPackaged
   if (isDev) {
     await mainWindow.loadURL('http://localhost:5173')
