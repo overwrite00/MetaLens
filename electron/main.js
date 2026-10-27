@@ -3,6 +3,11 @@ const path = require('path')
 const { spawn } = require('child_process')
 const net = require('net')
 const fs = require('fs')
+const { randomBytes } = require('crypto')
+const { pathToFileURL } = require('url')
+const { isTrustedFrame, secureWindow } = require('./security-policy')
+const { waitForSidecar } = require('./sidecar-health')
+const { handleSquirrelEvent } = require('./squirrel-events')
 const { spawnTree, killProcessTree } = require('./process-tree')
 
 // ─────────────────────── Windows/Squirrel install & update events ────────────
@@ -12,21 +17,7 @@ const { spawnTree, killProcessTree } = require('./process-tree')
 // relaunches it once setup is done — visible as GUI+splash flashing then
 // reopening. Inlined (rather than the electron-squirrel-startup package) so no
 // runtime node_modules need to be shipped in the packaged app.
-if (process.platform === 'win32') {
-  const squirrelCommand = process.argv[1]
-  const target = path.basename(process.execPath)
-  const runSquirrelUpdate = (args) => {
-    const updateExe = path.resolve(path.dirname(process.execPath), '..', 'Update.exe')
-    spawn(updateExe, args, { detached: true }).on('close', () => app.quit())
-  }
-  if (squirrelCommand === '--squirrel-install' || squirrelCommand === '--squirrel-updated') {
-    runSquirrelUpdate([`--createShortcut=${target}`])
-  } else if (squirrelCommand === '--squirrel-uninstall') {
-    runSquirrelUpdate([`--removeShortcut=${target}`])
-  } else if (squirrelCommand === '--squirrel-obsolete') {
-    app.quit()
-  }
-}
+const squirrelEvent = handleSquirrelEvent(app, spawn)
 
 // ─────────────────────── Privacy: disable Chromium network services ──────────
 // Must be called before app.whenReady() to take effect.
@@ -45,6 +36,10 @@ app.commandLine.appendSwitch('safebrowsing-disable-auto-update')
 let mainWindow = null
 let sidecarProcess = null
 let sidecarPort = null
+const sidecarToken = randomBytes(32).toString('hex')
+const trustedURL = app.isPackaged
+  ? pathToFileURL(path.join(__dirname, 'frontend', 'index.html')).href
+  : 'http://localhost:5173/'
 
 // ─────────────────────── Port discovery ──────────────────────────────────────
 
@@ -86,29 +81,18 @@ async function startSidecar() {
     sidecarArgs = [String(sidecarPort)]
   }
 
-  return new Promise((resolve, reject) => {
-    sidecarProcess = spawnTree(sidecarBin, sidecarArgs, {
-      env: { ...process.env },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-
-    sidecarProcess.stdout.on('data', (data) => { console.log('[sidecar]', data.toString().trim()) })
-    sidecarProcess.stderr.on('data', (data) => { console.error('[sidecar]', data.toString().trim()) })
-
-    sidecarProcess.on('error', reject)
-
-    // Poll until the sidecar is accepting connections
-    const deadline = Date.now() + 10000
-    const poll = () => {
-      const sock = net.connect(sidecarPort, '127.0.0.1')
-      sock.on('connect', () => { sock.destroy(); resolve(sidecarPort) })
-      sock.on('error', () => {
-        if (Date.now() > deadline) return reject(new Error('Sidecar startup timeout'))
-        setTimeout(poll, 200)
-      })
-    }
-    setTimeout(poll, 300)
+  sidecarProcess = spawnTree(sidecarBin, sidecarArgs, {
+    env: { ...process.env, METALENS_SIDECAR_TOKEN: sidecarToken },
+    stdio: ['ignore', 'pipe', 'pipe'],
   })
+  sidecarProcess.stdout.on('data', data => console.log('[sidecar]', data.toString().trim()))
+  sidecarProcess.stderr.on('data', data => console.error('[sidecar]', data.toString().trim()))
+  try {
+    return await waitForSidecar(sidecarProcess, sidecarPort, sidecarToken)
+  } catch (error) {
+    stopSidecar()
+    throw error
+  }
 }
 
 function stopSidecar() {
@@ -121,31 +105,36 @@ function stopSidecar() {
 // ─────────────────────── IPC handlers ────────────────────────────────────────
 
 function setupIPC() {
-  ipcMain.handle('get-port', () => sidecarPort)
+  const handle = (channel, callback) => ipcMain.handle(channel, (event, ...args) => {
+    if (!isTrustedFrame(event, mainWindow, trustedURL)) throw new Error('Untrusted IPC sender')
+    return callback(event, ...args)
+  })
+  handle('get-port', () => sidecarPort)
+  handle('get-sidecar-connection', () => ({ port: sidecarPort, token: sidecarToken }))
 
-  ipcMain.handle('get-app-version', () => app.getVersion())
+  handle('get-app-version', () => app.getVersion())
 
-  ipcMain.handle('open-folder-dialog', async () => {
+  handle('open-folder-dialog', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory'],
     })
     return result.canceled ? null : result.filePaths[0]
   })
 
-  ipcMain.handle('open-file-dialog', async () => {
+  handle('open-file-dialog', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openFile', 'multiSelections'],
     })
     return result.canceled ? [] : result.filePaths
   })
 
-  ipcMain.handle('path-sep', () => path.sep)
+  handle('path-sep', () => path.sep)
 
-  ipcMain.handle('path-join', (_, ...parts) => path.join(...parts))
+  handle('path-join', (_, ...parts) => path.join(...parts))
 
-  ipcMain.handle('path-dirname', (_, p) => path.dirname(p))
+  handle('path-dirname', (_, p) => path.dirname(p))
 
-  ipcMain.handle('list-drives', () => {
+  handle('list-drives', () => {
     if (process.platform !== 'win32') return []
     // Return available Windows drive letters
     const drives = []
@@ -156,7 +145,7 @@ function setupIPC() {
     return drives
   })
 
-  ipcMain.handle('home-dir', () => require('os').homedir())
+  handle('home-dir', () => require('os').homedir())
 }
 
 // ─────────────────────── Menu ─────────────────────────────────────────────────
@@ -216,11 +205,12 @@ async function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: false,
+      sandbox: true,
     },
     icon: path.join(__dirname, '..', 'frontend', 'public', 'icon.png'),
   })
 
+  secureWindow(mainWindow)
   const isDev = !app.isPackaged
   if (isDev) {
     await mainWindow.loadURL('http://localhost:5173')
@@ -236,7 +226,7 @@ async function createWindow() {
 
 // ─────────────────────── App lifecycle ───────────────────────────────────────
 
-app.whenReady().then(async () => {
+if (!squirrelEvent) app.whenReady().then(async () => {
   try {
     await startSidecar()
   } catch (err) {
