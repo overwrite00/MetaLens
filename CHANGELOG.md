@@ -7,6 +7,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ## [Unreleased] — Next Release
 
+### Security
+- Update Pillow to 13.0.0, pypdf to 6.21.2, Vite to 8.3.5 and Electron to 44.9.3;
+  refresh vulnerable Undici and source-map-js transitive dependencies.
+- Authenticate every sidecar API operation with a random session token passed by Electron;
+  restrict browser origins, IPC senders, navigation, popups and renderer permissions.
+- Enable the Electron renderer sandbox and a Content Security Policy in production and development.
+- Create private, unpredictable temporary workspaces for file updates and reject concurrent changes.
+
+### Fixed
+- Preserve unrelated PDF metadata and Office package parts, including macros, when editing properties.
+  Encrypted PDFs and digitally signed Office packages are read-only to protect their integrity.
+- Make audio/video changes atomic; validate metadata keys and values on the server and route filesystem
+  fields correctly, including mixed operations that must roll back together on failure.
+- Report image editing capabilities accurately: JPEG EXIF fields are editable; other image metadata
+  is read-only until a safe writer is available. Filesystem properties remain available separately.
+- Restore original values after edits and deletions with Undo; retain failed undo operations and
+  serialize saves with restores. Ignore obsolete file, folder, diff and hash responses.
+- Compare metadata without discarding case or whitespace differences; protect CSV exports against
+  spreadsheet formulas, release download URLs and report clipboard failures accurately.
+- Verify authenticated sidecar health during startup and skip normal startup during Squirrel events.
+
+### Tests
+- Add backend, Electron and React regression tests for these failure cases; run the React suite in CI.
+
 ### Roadmap
 
 - [ ] **CSV/JSON Export** — Export metadata for the current file or folder

@@ -116,13 +116,14 @@ Explore the sidecar API in [API.md](docs/API.md).
 
 | Category | Formats | Read | Write |
 |---|---|---|---|
-| Images | JPEG, PNG, TIFF, BMP, GIF, WebP | ✅ | ✅ |
+| Images | JPEG (supported EXIF fields) | ✅ | ✅ |
+| Images | PNG, TIFF, BMP, GIF, WebP | ✅ | — |
 | Images (RAW) | CR2, NEF, ARW, DNG | ✅ | — |
 | Audio | MP3, FLAC, OGG, M4A, WAV, AIFF, WMA, APE, Opus | ✅ | ✅ |
 | Video | MP4, MOV | ✅ | ✅ |
 | Video | MKV, AVI | ✅ | — |
-| Documents | PDF | ✅ | ✅ |
-| Office | DOCX, XLSX, PPTX | ✅ | ✅ |
+| Documents | PDF (unencrypted) | ✅ | ✅ |
+| Office | DOCX, XLSX, PPTX, DOCM, XLSM, PPTM (unsigned) | ✅ | ✅ |
 | Office (legacy) | DOC, XLS, PPT | ✅ | — |
 | Any file | Filesystem timestamps, permissions, xattr | ✅ | ✅ |
 | Other | Hundreds of formats via hachoir | ✅ | — |
@@ -175,10 +176,13 @@ React Frontend (Vite + TailwindCSS)
 
 ## 📊 Test Suite
 
-✅ **63 automated tests** covering handlers (including the hachoir fallback), the handler registry, path-security validation, and the release-notes extraction from the changelog.
+Automated Python, Electron and React suites cover metadata handlers, file integrity and rollback,
+path validation, sidecar authentication, desktop security, Undo, asynchronous UI updates and release notes.
 
 ```bash
 pytest python/tests/ -v
+cd electron && npm test
+cd ../frontend && npm test
 ```
 
 ---
@@ -234,5 +238,5 @@ Distributed with MIT License · [View License](LICENSE)
 
 ---
 
-*Last updated: 2026-10-05*
+*Last updated: 2026-10-27*
 *← [Requirements](docs/REQUIREMENTS.md) | [Docs →](docs/)*

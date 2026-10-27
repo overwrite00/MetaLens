@@ -6,8 +6,9 @@ MetaLens is designed with security-first principles:
 
 - **Fully offline** — all metadata reading and writing happens on your machine; there is no network call anywhere in the app
 - **Localhost-only sidecar** — the Python (FastAPI) backend binds to `127.0.0.1` only, on a dynamically chosen port, never `0.0.0.0`
-- **Electron hardening** — `nodeIntegration: false`, `contextIsolation: true`; the renderer only reaches the OS through a narrow `contextBridge` API (folder/file dialogs, drive listing), never raw Node/`fs` access
-- **Atomic writes** — every metadata write copies the file to a `.ml_tmp` temp file, applies the change there, then swaps it in with `os.replace()` (atomic on POSIX and Windows). A crash mid-write leaves the original file untouched
+- **Electron hardening** — `nodeIntegration: false`, `contextIsolation: true`, `sandbox: true`; IPC accepts only the application's main frame. Navigation and popups are blocked and a Content Security Policy limits renderer resources
+- **Authenticated sidecar** — a fresh random token is generated for each session, passed to Python through the environment and sent in an Authorization header. Requests without valid credentials are rejected; localhost binding alone is not treated as authentication
+- **Atomic writes** — changes are prepared in a private temporary directory beside the target, with checks for concurrent modification before replacement. Audio and video use the same mechanism. Writer failures leave the original content intact
 - **Path validation** — a dedicated `core.path_security` module validates and normalizes every path (resolves symlinks, blocks traversal) before any filesystem access, across all API routes
 - **Transparent code** — all handler and analysis logic is open-source and auditable
 
@@ -37,13 +38,14 @@ MetaLens is designed with security-first principles:
 ### Metadata Handlers
 
 - Uses established, audited libraries per format: Pillow/piexif (images), mutagen (audio/video), pypdf (PDF), python-docx/openpyxl/python-pptx (Office), olefile (legacy Office), hachoir (fallback)
-- Read-only handlers (RAW images, legacy Office, MKV/AVI) are enforced at the API level — `/write` and `/delete` return `422` if the handler doesn't support the operation
+- Field capabilities are enforced by the API; client-provided editability flags cannot override them. Image metadata outside supported JPEG EXIF, encrypted PDFs, digitally signed Office packages, legacy Office and MKV/AVI are read-only. Writable filesystem fields are handled separately
 - Filesystem access always goes through `validate_file_path`/`validate_directory_path` before touching disk
 
 ### IPC Boundary
 
 - The Electron renderer talks to the OS only through the `preload.js` `contextBridge` surface (dialogs, path helpers, drive listing) — no direct filesystem or process access
 - The renderer talks to the Python sidecar only over HTTP to `127.0.0.1:{dynamic_port}`, never a hardcoded port
+- The sidecar rejects foreign browser origins and requires its session token, including for `/health`. The normal development path is Vite plus Electron; opening the frontend in a standalone browser does not grant sidecar access
 
 ---
 
@@ -104,5 +106,5 @@ We appreciate responsible disclosure and will credit you in the security advisor
 
 ---
 
-*Last updated: 2026-07-14*
+*Last updated: 2026-10-27*
 *← [Contributing](./CONTRIBUTING.md) | [Back to README →](./README.md)*
