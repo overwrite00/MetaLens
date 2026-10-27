@@ -23,7 +23,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - Authenticate every sidecar API operation with a random session token passed by Electron;
   restrict browser origins, IPC senders, navigation, popups and renderer permissions.
 - Enable the Electron renderer sandbox and a Content Security Policy in production and development.
-- Recognize valid whitespace in inline-script closing tags while calculating development CSP hashes.
+- Recognize browser-tolerated inline-script closing tags while calculating development CSP hashes.
 - Create private, unpredictable temporary workspaces for file updates and reject concurrent changes.
 
 ### Fixed

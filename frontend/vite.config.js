@@ -11,7 +11,7 @@ export const developmentCsp = {
   transformIndexHtml: {
     order: 'post',
     handler(html) {
-      const hashes = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)]
+      const hashes = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\b\s*[^>]*>/gi)]
         .filter(([, attributes, code]) => !/\bsrc\s*=/.test(attributes) && code.trim())
         .map(([, , code]) => `'sha256-${createHash('sha256').update(code).digest('base64')}'`)
       return html.replace("script-src 'self'", `script-src 'self' ${hashes.join(' ')}`)
