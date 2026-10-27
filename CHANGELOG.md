@@ -7,6 +7,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ## [Unreleased] — Next Release
 
+### Roadmap
+
+- [ ] **CSV/JSON Export** — Export metadata for the current file or folder
+- [ ] **Batch Edit** — Apply a field change to multiple selected files at once
+- [ ] **Search/Filter Bar** — Filter the file list by name or extension
+
+---
+
+## [0.3.5] — 2026-10-27
+
 ### Security
 - Update Pillow to 13.0.0, pypdf to 6.21.2, Vite to 8.3.5 and Electron to 44.9.3;
   refresh vulnerable Undici and source-map-js transitive dependencies.
@@ -30,12 +40,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ### Tests
 - Add backend, Electron and React regression tests for these failure cases; run the React suite in CI.
-
-### Roadmap
-
-- [ ] **CSV/JSON Export** — Export metadata for the current file or folder
-- [ ] **Batch Edit** — Apply a field change to multiple selected files at once
-- [ ] **Search/Filter Bar** — Filter the file list by name or extension
 
 ---
 
