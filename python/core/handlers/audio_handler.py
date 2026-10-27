@@ -1,5 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
+from copy import deepcopy
 
 from core.base_handler import BaseMetadataHandler
 from core.models import MetadataField, MetadataRecord
@@ -90,30 +91,51 @@ class AudioHandler(BaseMetadataHandler):
         return record
 
     def write(self, path: Path, fields: list[MetadataField]) -> None:
+        self._atomic_write(path, lambda tmp: self._write_tags(tmp, fields))
+
+    def _write_tags(self, path: Path, fields: list[MetadataField]) -> None:
         import mutagen
         import mutagen.id3 as id3_module
         audio = mutagen.File(path, easy=False)
         if audio is None:
             raise RuntimeError("mutagen cannot parse file for writing")
+        if audio.tags is None:
+            audio.add_tags()
         is_id3 = isinstance(getattr(audio, 'tags', None), id3_module.ID3)
         for f in fields:
             if not f.key.startswith("tag:"):
                 continue
             tag_key = f.key[len("tag:"):]
             if is_id3:
-                frame_cls = getattr(id3_module, tag_key, None)
-                if frame_cls is not None:
-                    try:
-                        audio.tags[tag_key] = frame_cls(encoding=3, text=[str(f.value)])
-                    except TypeError:
-                        audio.tags[tag_key] = frame_cls(text=[str(f.value)])
+                frame = deepcopy(audio.tags.get(tag_key))
+                if frame is None:
+                    frame_id, _, descriptor = tag_key.partition(":")
+                    frame_cls = id3_module.Frames.get(frame_id)
+                    if frame_cls is None:
+                        raise ValueError(f"Unsupported ID3 frame: {tag_key}")
+                    frame = frame_cls(encoding=3)
+                    if frame_id in {"COMM", "USLT"}:
+                        description, separator, language = descriptor.rpartition(":")
+                        if not separator or len(language) != 3:
+                            raise ValueError("Invalid ID3 description/language key")
+                        frame.desc, frame.lang = description, language
+                    elif hasattr(frame, "desc"):
+                        frame.desc = descriptor
+                if hasattr(frame, "text"):
+                    frame.text = str(f.value) if isinstance(frame.text, str) else [str(f.value)]
+                elif hasattr(frame, "url"):
+                    frame.url = str(f.value)
                 else:
-                    audio.tags[tag_key] = f.value
+                    raise ValueError(f"This ID3 frame is read-only: {tag_key}")
+                audio.tags.add(frame)
             else:
                 audio[tag_key] = [str(f.value)]
         audio.save()
 
     def delete(self, path: Path, keys: list[str]) -> None:
+        self._atomic_write(path, lambda tmp: self._delete_tags(tmp, keys))
+
+    def _delete_tags(self, path: Path, keys: list[str]) -> None:
         import mutagen
         audio = mutagen.File(path, easy=False)
         if audio is None:

@@ -88,6 +88,8 @@ class FilesystemHandler(BaseMetadataHandler):
                     ts = dt.timestamp()
                     st = path.stat()
                     os.utime(path, (st.st_atime, ts))
+                except (ValueError, TypeError, OverflowError) as e:
+                    raise ValueError(f"Invalid mtime: {e}") from e
                 except Exception as e:
                     raise RuntimeError(f"Cannot set mtime: {e}") from e
             elif f.key.startswith("xattr:") and sys.platform != "win32":

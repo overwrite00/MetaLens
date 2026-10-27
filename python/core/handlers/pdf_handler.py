@@ -22,12 +22,20 @@ class PdfHandler(BaseMetadataHandler):
     EXTENSIONS = frozenset({".pdf"})
     PRIORITY = 15
 
+    def writable_field(self, path: Path, key: str) -> MetadataField | None:
+        pdf_key = "/" + key[4:] if key.startswith("pdf:") else ""
+        if pdf_key in _PDF_LABELS:
+            return MetadataField(key, _PDF_LABELS[pdf_key], "", source="pdf")
+        return None
+
     def read(self, path: Path) -> MetadataRecord:
         fields: list[MetadataField] = []
         errors: list[str] = []
+        writable = False
         try:
             from pypdf import PdfReader
             reader = PdfReader(str(path))
+            writable = not reader.is_encrypted
             meta = reader.metadata or {}
             for key, val in meta.items():
                 label = _PDF_LABELS.get(str(key), str(key).lstrip("/"))
@@ -50,7 +58,10 @@ class PdfHandler(BaseMetadataHandler):
             errors.append(f"PDF read error: {e}")
 
         record = self._make_record(path, read_errors=errors,
-                                   supports_write=True, supports_delete=True)
+                                   supports_write=writable, supports_delete=writable)
+        if not writable:
+            for field in fields:
+                field.editable = field.deletable = False
         record.fields = fields
         return record
 
@@ -58,8 +69,10 @@ class PdfHandler(BaseMetadataHandler):
         def _do_write(tmp: Path) -> None:
             from pypdf import PdfReader, PdfWriter
             reader = PdfReader(str(tmp))
+            if reader.is_encrypted:
+                raise ValueError("Editing encrypted PDFs is not supported")
             writer = PdfWriter()
-            writer.clone_reader_document_root(reader)
+            writer.clone_document_from_reader(reader)
             updates = {}
             for f in fields:
                 if f.key.startswith("pdf:") and f.editable:
@@ -79,13 +92,15 @@ class PdfHandler(BaseMetadataHandler):
             from pypdf import PdfReader, PdfWriter
             import io as _io
             reader = PdfReader(str(tmp))
+            if reader.is_encrypted:
+                raise ValueError("Editing encrypted PDFs is not supported")
             writer = PdfWriter()
-            writer.clone_reader_document_root(reader)
+            writer.clone_document_from_reader(reader)
             existing = dict(reader.metadata or {})
             for key in keys:
                 pdf_key = "/" + key[len("pdf:"):] if key.startswith("pdf:") else key
                 existing.pop(pdf_key, None)
-            writer.add_metadata(existing)
+            writer.metadata = existing
             buf = _io.BytesIO()
             writer.write(buf)
             tmp.write_bytes(buf.getvalue())

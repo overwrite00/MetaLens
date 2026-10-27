@@ -41,6 +41,9 @@ class VideoHandler(BaseMetadataHandler):
         return record
 
     def write(self, path: Path, fields: list[MetadataField]) -> None:
+        self._atomic_write(path, lambda tmp: self._write_tags(tmp, fields))
+
+    def _write_tags(self, path: Path, fields: list[MetadataField]) -> None:
         if path.suffix.lower() not in _RW_EXTS:
             raise NotImplementedError(f"Write not supported for {path.suffix}")
         import mutagen.mp4
@@ -53,6 +56,9 @@ class VideoHandler(BaseMetadataHandler):
         mp4.save()
 
     def delete(self, path: Path, keys: list[str]) -> None:
+        self._atomic_write(path, lambda tmp: self._delete_tags(tmp, keys))
+
+    def _delete_tags(self, path: Path, keys: list[str]) -> None:
         if path.suffix.lower() not in _RW_EXTS:
             raise NotImplementedError(f"Delete not supported for {path.suffix}")
         import mutagen.mp4
