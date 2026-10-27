@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { GitCompare, Download, ShieldCheck, CheckCircle2, XCircle, Hash } from 'lucide-react'
 import { Button } from './ui/Button'
 import { Spinner } from './ui/Spinner'
@@ -10,10 +10,15 @@ function DiffHashSection({ fileA, fileB }) {
   const [hashes, setHashes]   = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
+  const request = useRef(0)
 
-  useEffect(() => { setHashes(null); setError(null) }, [fileA, fileB])
+  useEffect(() => {
+    setHashes(null); setError(null); setLoading(false)
+    return () => { request.current += 1 }
+  }, [fileA, fileB])
 
   const compute = useCallback(async () => {
+    const id = ++request.current
     setLoading(true); setError(null)
     try {
       const algs = HASH_ALGORITHMS.join(',')
@@ -21,11 +26,11 @@ function DiffHashSection({ fileA, fileB }) {
         metalens.hash(fileA, algs),
         metalens.hash(fileB, algs),
       ])
-      setHashes({ a: resA.hashes, b: resB.hashes })
+      if (id === request.current) setHashes({ a: resA.hashes, b: resB.hashes })
     } catch (e) {
-      setError(e.message)
+      if (id === request.current) setError(e.message)
     } finally {
-      setLoading(false)
+      if (id === request.current) setLoading(false)
     }
   }, [fileA, fileB])
 
@@ -90,12 +95,15 @@ export function DiffView({ fileA, fileB }) {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    if (!fileA || !fileB) return
-    setLoading(true); setError(null)
-    metalens.diff(fileA, fileB)
-      .then(setDiff)
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false))
+    let cancelled = false
+    setDiff(null); setLoading(Boolean(fileA && fileB)); setError(null)
+    if (fileA && fileB) {
+      metalens.diff(fileA, fileB)
+        .then(data => { if (!cancelled) setDiff(data) })
+        .catch(e => { if (!cancelled) setError(e.message) })
+        .finally(() => { if (!cancelled) setLoading(false) })
+    }
+    return () => { cancelled = true }
   }, [fileA, fileB])
 
   if (!fileA || !fileB) {
@@ -167,7 +175,7 @@ export function DiffView({ fileA, fileB }) {
           </Section>
         )}
 
-        <DiffHashSection fileA={fileA} fileB={fileB} />
+        <DiffHashSection key={JSON.stringify([fileA, fileB])} fileA={fileA} fileB={fileB} />
       </div>
     </div>
   )
@@ -199,7 +207,7 @@ function DiffRow({ label, valueA, valueB, variant }) {
   )
 }
 
-function exportCsv(diff, nameA, nameB) {
+export function makeCsv(diff, nameA, nameB) {
   const rows = [['Field', nameA, nameB, 'Status']]
   diff.only_in_a.forEach(f => rows.push([f.label, String(f.value ?? ''), '', 'only_in_a']))
   diff.only_in_b.forEach(f => rows.push([f.label, '', String(f.value ?? ''), 'only_in_b']))
@@ -207,8 +215,24 @@ function exportCsv(diff, nameA, nameB) {
     rows.push([field_a.label, String(field_a.value ?? ''), String(field_b.value ?? ''), 'changed']))
   diff.identical.forEach(f => rows.push([f.label, String(f.value ?? ''), String(f.value ?? ''), 'identical']))
 
-  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
-  const blob = new Blob([csv], { type: 'text/csv' })
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
-  a.download = `diff_${nameA}_vs_${nameB}.csv`; a.click()
+  return rows.map(r => r.map(cell => {
+    const text = String(cell)
+    // CSV is for spreadsheet viewing: force formula-like input to text.
+    const safe = /^[\s\u0000-\u001f]*[=+\-@＝＋－＠]|^[\t\r\n]/u.test(text) ? `'${text}` : text
+    return `"${safe.replace(/"/g, '""')}"`
+  }).join(',')).join('\r\n')
+}
+
+export function exportCsv(diff, nameA, nameB) {
+  const blob = new Blob([makeCsv(diff, nameA, nameB)], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `diff_${nameA}_vs_${nameB}.csv`
+  document.body.appendChild(a)
+  try { a.click() } finally {
+    a.remove()
+    // Keep the URL alive until the browser has started the download.
+    setTimeout(() => URL.revokeObjectURL(url), 0)
+  }
 }
