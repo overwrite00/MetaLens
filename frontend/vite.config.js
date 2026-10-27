@@ -5,13 +5,13 @@ import { createHash } from 'node:crypto'
 
 // Vite's React refresh preamble is inline in development. Authorize only its
 // actual contents; production retains script-src 'self' without inline scripts.
-const developmentCsp = {
+export const developmentCsp = {
   name: 'development-csp',
   apply: 'serve',
   transformIndexHtml: {
     order: 'post',
     handler(html) {
-      const hashes = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
+      const hashes = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)]
         .filter(([, attributes, code]) => !/\bsrc\s*=/.test(attributes) && code.trim())
         .map(([, , code]) => `'sha256-${createHash('sha256').update(code).digest('base64')}'`)
       return html.replace("script-src 'self'", `script-src 'self' ${hashes.join(' ')}`)

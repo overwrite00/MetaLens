@@ -23,6 +23,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - Authenticate every sidecar API operation with a random session token passed by Electron;
   restrict browser origins, IPC senders, navigation, popups and renderer permissions.
 - Enable the Electron renderer sandbox and a Content Security Policy in production and development.
+- Recognize valid whitespace in inline-script closing tags while calculating development CSP hashes.
 - Create private, unpredictable temporary workspaces for file updates and reject concurrent changes.
 
 ### Fixed
@@ -39,7 +40,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - Verify authenticated sidecar health during startup and skip normal startup during Squirrel events.
 
 ### Tests
-- Add backend, Electron and React regression tests for these failure cases; run the React suite in CI.
+- Add backend, Electron and React regression tests for these failure cases, including CSP script-tag
+  parsing; run the React suite in CI.
 
 ---
 
