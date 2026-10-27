@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Eye, Pencil, GitCompare, AlertTriangle, ShieldCheck, Copy, Check, Hash } from 'lucide-react'
 import { Spinner } from './ui/Spinner'
 import { MetadataTable } from './MetadataTable'
@@ -10,10 +10,25 @@ const HASH_ALGORITHMS = ['md5', 'sha1', 'sha256', 'sha512', 'blake2b']
 
 function HashRow({ label, value }) {
   const [copied, setCopied] = useState(false)
-  const copy = () => {
-    navigator.clipboard.writeText(value)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
+  const [error, setError] = useState(null)
+  const timer = useRef(null)
+  const request = useRef(0)
+  useEffect(() => () => {
+    request.current += 1
+    clearTimeout(timer.current)
+  }, [])
+  const copy = async () => {
+    const id = ++request.current
+    clearTimeout(timer.current)
+    setCopied(false); setError(null)
+    try {
+      await navigator.clipboard.writeText(value)
+      if (id !== request.current) return
+      setCopied(true)
+      timer.current = setTimeout(() => setCopied(false), 1500)
+    } catch (e) {
+      if (id === request.current) setError(`Copy failed: ${e.message}`)
+    }
   }
   return (
     <div className="flex items-start gap-2 py-1.5 border-b border-cyber-border/40 last:border-0">
@@ -23,7 +38,8 @@ function HashRow({ label, value }) {
       <span className="flex-1 font-mono text-[10px] text-cyber-text break-all leading-relaxed">
         {value}
       </span>
-      <button onClick={copy} title="Copy"
+      {error && <span role="alert" className="text-[10px] text-cyber-danger">{error}</span>}
+      <button onClick={copy} title="Copy" aria-label={`${copied ? 'Copied' : 'Copy'} ${label}`}
         className="flex-shrink-0 text-cyber-muted hover:text-cyber-cyan transition-colors mt-0.5">
         {copied ? <Check size={11} className="text-cyber-success" /> : <Copy size={11} />}
       </button>
@@ -35,19 +51,24 @@ function HashSection({ filePath }) {
   const [hashes, setHashes]   = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
+  const request = useRef(0)
 
   // Reset when file changes
-  useEffect(() => { setHashes(null); setError(null) }, [filePath])
+  useEffect(() => {
+    setHashes(null); setError(null); setLoading(false)
+    return () => { request.current += 1 }
+  }, [filePath])
 
   const compute = useCallback(async () => {
+    const id = ++request.current
     setLoading(true); setError(null)
     try {
       const result = await metalens.hash(filePath, HASH_ALGORITHMS.join(','))
-      setHashes(result.hashes)
+      if (id === request.current) setHashes(result.hashes)
     } catch (e) {
-      setError(e.message)
+      if (id === request.current) setError(e.message)
     } finally {
-      setLoading(false)
+      if (id === request.current) setLoading(false)
     }
   }, [filePath])
 
@@ -93,34 +114,30 @@ const TABS = [
   { id: 'diff', label: 'Diff',     Icon: GitCompare },
 ]
 
-export function DetailPanel({ filePath, filePathB, onUndoPush }) {
+export function DetailPanel({ filePath, filePathB, onUndoPush, runExclusive, mutationBusy, reloadKey }) {
   const [tab, setTab] = useState('view')
-  const [record, setRecord] = useState(null)
+  const [loaded, setLoaded] = useState(null)
+  const record = loaded?.path === filePath ? loaded.record : null
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [revision, setRevision] = useState(0)
 
   useEffect(() => {
-    if (!filePath) { setRecord(null); return }
-    load(filePath)
-  }, [filePath])
+    let cancelled = false
+    setLoaded(null); setError(null); setLoading(Boolean(filePath))
+    if (filePath) {
+      metalens.read(filePath)
+        .then(data => { if (!cancelled) setLoaded({ path: filePath, record: data }) })
+        .catch(e => { if (!cancelled) setError(e.message) })
+        .finally(() => { if (!cancelled) setLoading(false) })
+    }
+    return () => { cancelled = true }
+  }, [filePath, reloadKey, revision])
 
   // Auto-switch to diff tab when two files are selected
   useEffect(() => {
     if (filePathB) setTab('diff')
   }, [filePathB])
-
-  async function load(path) {
-    setLoading(true); setError(null)
-    try {
-      const data = await metalens.read(path)
-      setRecord(data)
-    } catch (e) {
-      setError(e.message)
-      setRecord(null)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const filename = filePath ? filePath.split(/[\\/]/).pop() : null
 
@@ -175,15 +192,18 @@ export function DetailPanel({ filePath, filePathB, onUndoPush }) {
         {!loading && !error && filePath && tab === 'view' && (
           <div className="flex flex-col h-full overflow-y-auto">
             <MetadataTable fields={record?.fields ?? []} />
-            <HashSection filePath={filePath} />
+            <HashSection key={filePath} filePath={filePath} />
           </div>
         )}
         {!loading && !error && filePath && tab === 'edit' && (
           <MetadataEditor
+            key={filePath}
             record={record}
             filePath={filePath}
-            onSaved={() => load(filePath)}
+            onSaved={() => setRevision(value => value + 1)}
             onUndoPush={onUndoPush}
+            runExclusive={runExclusive}
+            mutationBusy={mutationBusy}
           />
         )}
         {tab === 'diff' && (
