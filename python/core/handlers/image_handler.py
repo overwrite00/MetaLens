@@ -236,12 +236,18 @@ def _encode_exif_value(value: Any, tag_type: int) -> Any:
         value = json.loads(value)
     if tag_type in {5, 10}:  # unsigned / signed rational
         def rational(item):
-            if isinstance(item, (list, tuple)) and len(item) == 2:
-                result = Fraction(int(item[0]), int(item[1]))
-            else:
-                result = Fraction(str(item))
+            try:
+                if isinstance(item, (list, tuple)) and len(item) == 2:
+                    result = Fraction(int(item[0]), int(item[1]))
+                else:
+                    result = Fraction(str(item))
+            except (ValueError, ZeroDivisionError, OverflowError) as exc:
+                raise ValueError("Invalid EXIF rational") from exc
             if tag_type == 5 and result < 0:
                 raise ValueError("Unsigned EXIF rational cannot be negative")
+            low, high = (0, 2**32 - 1) if tag_type == 5 else (-2**31, 2**31 - 1)
+            if not low <= result.numerator <= high or not 1 <= result.denominator <= high:
+                raise ValueError("EXIF rational is outside its supported range")
             return result.numerator, result.denominator
         if isinstance(value, (list, tuple)) and not (len(value) == 2 and all(isinstance(v, int) for v in value)):
             return tuple(rational(v) for v in value)
@@ -250,6 +256,10 @@ def _encode_exif_value(value: Any, tag_type: int) -> Any:
         def integer(item):
             if isinstance(item, bool) or str(int(item)) != str(item):
                 raise ValueError("EXIF numeric tag requires an integer")
-            return int(item)
+            number = int(item)
+            low, high = {1: (0, 255), 3: (0, 65535), 4: (0, 2**32 - 1), 9: (-2**31, 2**31 - 1)}[tag_type]
+            if not low <= number <= high:
+                raise ValueError("EXIF integer is outside its supported range")
+            return number
         return tuple(integer(v) for v in value) if isinstance(value, (list, tuple)) else integer(value)
     raise ValueError("This EXIF data type is read-only")

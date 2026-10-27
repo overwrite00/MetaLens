@@ -206,6 +206,7 @@ def secure_atomic_write(
         if not os.access(target, os.W_OK):
             raise PathSecurityError(f"No write permission for: {target}")
         original = _file_identity(target)
+        original_stat = target.stat()
         # An exclusively created private directory protects the entire callback,
         # including libraries which close/reopen the temporary file by pathname.
         directory = Path(tempfile.mkdtemp(prefix=".metalens-", dir=target.parent))
@@ -216,6 +217,8 @@ def secure_atomic_write(
             write_fn(temp_path)
             if not stat.S_ISREG(temp_path.lstat().st_mode):
                 raise PathSecurityError("Temporary file is not a regular file")
+            if sys.platform != "win32":
+                _preserve_posix_owner(temp_path, original_stat)
             if _file_identity(target) != original:
                 raise PathSecurityError("Target changed during metadata write")
             with temp_path.open("r+b") as stream:
@@ -227,6 +230,15 @@ def secure_atomic_write(
         finally:
             if cleanup:
                 shutil.rmtree(directory)
+
+
+def _preserve_posix_owner(path: Path, original) -> None:
+    current = path.stat()
+    if (current.st_uid, current.st_gid) != (original.st_uid, original.st_gid):
+        # copy2 does not preserve ownership. Refuse the mutation if the caller
+        # cannot restore it, rather than silently changing the file's owner.
+        os.chown(path, original.st_uid, original.st_gid)
+        os.chmod(path, stat.S_IMODE(original.st_mode))
 
 
 def _replace_file(replacement: Path, target: Path) -> None:
