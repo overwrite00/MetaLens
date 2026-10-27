@@ -7,6 +7,20 @@ REST API exposed by the Python (FastAPI) sidecar that the Electron main process 
 
 ---
 
+## Authentication and origins
+
+Every API request, including `/health`, requires `Authorization: Bearer <session-token>`.
+Electron creates the token at startup and passes it to Python through `METALENS_SIDECAR_TOKEN`;
+the sidecar refuses to start without it. The renderer receives connection details through validated
+IPC. Do not put tokens in URLs, source files, logs or Vite environment variables.
+
+Missing or invalid credentials return **401**; an unconfigured imported application returns **503**.
+Foreign browser origins return **403**. Allowed origins are the packaged application's `null` origin
+and the Vite origins `http://localhost:5173` and `http://127.0.0.1:5173`, with valid credentials still required.
+Use Vite together with Electron for development; the standalone browser fallback is disabled.
+
+---
+
 ## 📚 Table of Contents
 
 1. [GET /health](#get-health)
@@ -74,7 +88,7 @@ Atomically writes one or more metadata fields back to the file.
 {
   "path": "/home/user/Pictures/photo.jpg",
   "fields": [
-    { "key": "Artist", "value": "Jane Doe" }
+    { "key": "exif:Artist", "value": "Jane Doe" }
   ]
 }
 ```
@@ -84,7 +98,10 @@ Atomically writes one or more metadata fields back to the file.
 { "ok": true, "errors": [] }
 ```
 
-Returns **422** if the file's handler reports `supports_write: false` (e.g. RAW images, legacy Office formats, MKV/AVI).
+Returns **422** for unsupported, unknown or read-only fields, invalid values or malformed requests.
+The server derives field permissions itself. Writable filesystem fields such as `fs:mtime` are routed
+separately from format metadata, including on files whose format metadata is read-only.
+Mixed writes are prepared together before replacing the original. Concurrent changes return **409**.
 
 ---
 
@@ -186,5 +203,5 @@ Defined in `python/core/models.py`.
 
 ---
 
-*Last updated: 2026-07-14*
+*Last updated: 2026-10-27*
 *← [Usage](./USAGE.md) | [Back to README →](../README.md)*

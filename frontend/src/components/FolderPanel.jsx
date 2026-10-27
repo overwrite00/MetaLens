@@ -1,55 +1,76 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Folder, FolderOpen, HardDrive, Home, ChevronRight, ChevronDown, RefreshCw } from 'lucide-react'
 import { Button } from './ui/Button'
+import { metalens } from '../api/client'
 
 export function FolderPanel({ onSelectPath }) {
   const [tree, setTree] = useState([])
   const [expanded, setExpanded] = useState({})
   const [selected, setSelected] = useState(null)
   const [bookmarks, setBookmarks] = useState([])
+  const [error, setError] = useState(null)
+  const generation = useRef(0)
+  const requests = useRef(new Set())
 
   useEffect(() => {
     initRoots()
+    return () => { generation.current += 1 }
   }, [])
 
   async function initRoots() {
+    const version = ++generation.current
+    requests.current.clear()
+    setExpanded({}); setTree([]); setSelected(null); setError(null)
     const roots = []
-    if (window.electronAPI) {
-      const drives = await window.electronAPI.listDrives()
-      const home = await window.electronAPI.homeDir()
-      if (drives.length) {
-        drives.forEach(d => roots.push({ name: d, path: d, type: 'drive' }))
-      } else {
-        roots.push({ name: 'Root', path: '/', type: 'drive' })
+    try {
+      if (window.electronAPI) {
+        const drives = await window.electronAPI.listDrives()
+        const home = await window.electronAPI.homeDir()
+        if (drives.length) {
+          drives.forEach(d => roots.push({ name: d, path: d, type: 'drive' }))
+        } else {
+          roots.push({ name: 'Root', path: '/', type: 'drive' })
+        }
+        if (version !== generation.current) return
+        if (home) setBookmarks([{ label: 'Home', path: home, icon: Home }])
       }
-      if (home) setBookmarks([{ label: 'Home', path: home, icon: Home }])
+      setTree(roots.map(r => ({ ...r, children: null, loading: false })))
+    } catch (e) {
+      if (version === generation.current) setError(e.message)
     }
-    setTree(roots.map(r => ({ ...r, children: null, loading: false })))
   }
 
-  const expand = useCallback(async (node) => {
+  async function expand(node) {
     const key = node.path
     if (expanded[key]) {
       setExpanded(e => ({ ...e, [key]: false }))
       return
     }
-    if (!node.children) {
-      await loadChildren(node)
-    }
+    if (requests.current.has(key)) return
+    if (!node.children && !await loadChildren(node)) return
     setExpanded(e => ({ ...e, [key]: true }))
-  }, [expanded])
+  }
 
   async function loadChildren(node) {
+    const version = generation.current
+    requests.current.add(node.path)
+    setError(null)
     setTree(prev => updateNode(prev, node.path, n => ({ ...n, loading: true })))
     try {
-      const port = window.electronAPI ? await window.electronAPI.getPort() : 57321
-      const res = await fetch(`http://127.0.0.1:${port}/list?path=${encodeURIComponent(node.path)}`)
-      const data = await res.json()
+      const data = await metalens.list(node.path)
+      if (version !== generation.current) return false
       const dirs = (data.items || []).filter(i => i.is_dir)
         .map(i => ({ name: i.name, path: i.path, type: 'dir', children: null, loading: false }))
       setTree(prev => updateNode(prev, node.path, n => ({ ...n, children: dirs, loading: false })))
-    } catch {
-      setTree(prev => updateNode(prev, node.path, n => ({ ...n, loading: false })))
+      return true
+    } catch (e) {
+      if (version === generation.current) {
+        setError(e.message)
+        setTree(prev => updateNode(prev, node.path, n => ({ ...n, loading: false })))
+      }
+      return false
+    } finally {
+      if (version === generation.current) requests.current.delete(node.path)
     }
   }
 
@@ -75,6 +96,7 @@ export function FolderPanel({ onSelectPath }) {
       </div>
 
       {/* Tree */}
+      {error && <div role="alert" className="px-3 py-2 text-cyber-danger text-xs">{error}</div>}
       <div className="flex-1 overflow-y-auto px-1 py-1">
         {tree.map(node => (
           <TreeNode key={node.path} node={node} depth={0}

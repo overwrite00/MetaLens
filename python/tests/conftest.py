@@ -10,9 +10,11 @@ from main import app
 
 
 @pytest_asyncio.fixture
-async def client():
+async def client(monkeypatch):
+    monkeypatch.setattr(app.state, "sidecar_token", "test-session-secret")
     async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
+        transport=ASGITransport(app=app), base_url="http://test",
+        headers={"Authorization": "Bearer test-session-secret"},
     ) as c:
         yield c
 

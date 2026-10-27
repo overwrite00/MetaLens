@@ -1,6 +1,8 @@
 from __future__ import annotations
 from pathlib import Path
 from typing import Any
+from fractions import Fraction
+import json
 
 from core.base_handler import BaseMetadataHandler
 from core.models import MetadataField, MetadataRecord
@@ -76,10 +78,23 @@ class ImageHandler(BaseMetadataHandler):
     })
     PRIORITY = 10
 
+    def writable_field(self, path: Path, key: str) -> MetadataField | None:
+        import piexif
+        if path.suffix.lower() not in {".jpg", ".jpeg"}:
+            return None
+        for tag_id, (candidate, label) in EXIF_TAGS.items():
+            if candidate != key or tag_id in {0x8769, 0x8825}:
+                continue
+            ifd = "GPS" if key.startswith("gps:") else ("Exif" if tag_id >= 0x9000 else "0th")
+            if piexif.TAGS[ifd][tag_id]["type"] in {1, 2, 3, 4, 5, 9, 10}:
+                return MetadataField(key, label, "", source="gps" if ifd == "GPS" else "exif")
+        return None
+
     def read(self, path: Path) -> MetadataRecord:
         fields: list[MetadataField] = []
         errors: list[str] = []
-        writable = path.suffix.lower() not in _READ_ONLY_EXTS
+        # piexif.insert supports JPEG; other formats are metadata-read-only.
+        writable = path.suffix.lower() in {".jpg", ".jpeg"}
 
         try:
             from PIL import Image
@@ -112,27 +127,27 @@ class ImageHandler(BaseMetadataHandler):
         record = self._make_record(path, read_errors=errors,
                                    supports_write=writable, supports_delete=writable)
         record.fields = fields
+        if not writable:
+            for field in fields:
+                field.editable = field.deletable = False
         return record
 
     def write(self, path: Path, fields: list[MetadataField]) -> None:
-        if path.suffix.lower() not in {".jpg", ".jpeg", ".tif", ".tiff"}:
+        if path.suffix.lower() not in {".jpg", ".jpeg"}:
             raise NotImplementedError(f"EXIF write not supported for {path.suffix}")
 
         def _do_write(tmp: Path) -> None:
             import piexif
-            try:
-                exif_dict = piexif.load(str(tmp))
-            except Exception:
-                exif_dict = {"0th": {}, "Exif": {}, "GPS": {}, "1st": {}}
+            exif_dict = piexif.load(str(tmp))
 
             tag_map = {v[0]: k for k, v in EXIF_TAGS.items()}
             for f in fields:
                 tag_id = tag_map.get(f.key)
-                if tag_id is None:
-                    continue
+                if tag_id is None or tag_id in {0x8769, 0x8825}:
+                    raise ValueError(f"Unsupported EXIF field: {f.key}")
                 ifd = "GPS" if f.key.startswith("gps:") else ("Exif" if f.key.startswith("exif:") and tag_id >= 0x9000 else "0th")
-                val = str(f.value).encode("utf-8") if isinstance(f.value, str) else f.value
-                exif_dict[ifd][tag_id] = val
+                tag_type = piexif.TAGS[ifd][tag_id]["type"]
+                exif_dict[ifd][tag_id] = _encode_exif_value(f.value, tag_type)
 
             exif_bytes = piexif.dump(exif_dict)
             piexif.insert(exif_bytes, str(tmp))
@@ -140,22 +155,19 @@ class ImageHandler(BaseMetadataHandler):
         self._atomic_write(path, _do_write)
 
     def delete(self, path: Path, keys: list[str]) -> None:
-        if path.suffix.lower() not in {".jpg", ".jpeg", ".tif", ".tiff"}:
+        if path.suffix.lower() not in {".jpg", ".jpeg"}:
             raise NotImplementedError(f"EXIF delete not supported for {path.suffix}")
 
         def _do_delete(tmp: Path) -> None:
             import piexif
-            try:
-                exif_dict = piexif.load(str(tmp))
-            except Exception:
-                return
+            exif_dict = piexif.load(str(tmp))
             tag_map = {v[0]: k for k, v in EXIF_TAGS.items()}
             for key in keys:
                 tag_id = tag_map.get(key)
-                if tag_id is None:
-                    continue
-                for ifd in ("0th", "Exif", "GPS", "1st"):
-                    exif_dict[ifd].pop(tag_id, None)
+                if tag_id is None or tag_id in {0x8769, 0x8825}:
+                    raise ValueError(f"Unsupported EXIF field: {key}")
+                ifd = "GPS" if key.startswith("gps:") else ("Exif" if tag_id >= 0x9000 else "0th")
+                exif_dict[ifd].pop(tag_id, None)
             exif_bytes = piexif.dump(exif_dict)
             piexif.insert(exif_bytes, str(tmp))
 
@@ -173,14 +185,19 @@ def _read_exif(path: Path, errors: list[str]) -> list[MetadataField]:
             source = "gps" if ifd_name == "GPS" else "exif"
             for tag_id, raw_val in ifd_data.items():
                 info = EXIF_TAGS.get(tag_id)
-                if info is None:
+                editable = info is not None and ifd_name in {"0th", "Exif", "GPS"} and tag_id not in {0x8769, 0x8825}
+                editable = editable and piexif.TAGS.get(ifd_name, {}).get(tag_id, {}).get("type") in {1, 2, 3, 4, 5, 9, 10}
+                if info is None or ifd_name not in {"0th", "Exif", "GPS"}:
                     key = f"{source}:tag_{tag_id}"
+                    if ifd_name not in {"0th", "Exif", "GPS"}:
+                        key = f"{source}:{ifd_name}_tag_{tag_id}"
                     label = f"Tag {tag_id}"
                 else:
                     key, label = info
                 value = _decode_exif_value(raw_val)
                 fields.append(MetadataField(key, label, value, raw_value=raw_val,
-                                            source=source))
+                                            source=source, editable=editable,
+                                            deletable=editable))
     except Exception as e:
         errors.append(f"EXIF read error: {e}")
     return fields
@@ -193,7 +210,7 @@ def _read_png_text(path: Path, errors: list[str]) -> list[MetadataField]:
         with Image.open(path) as img:
             for k, v in img.info.items():
                 if isinstance(v, str):
-                    fields.append(MetadataField(f"png:{k}", k, v, source="png"))
+                    fields.append(MetadataField(f"png:{k}", k, v, source="png", editable=False, deletable=False))
     except Exception as e:
         errors.append(f"PNG text read error: {e}")
     return fields
@@ -204,6 +221,45 @@ def _decode_exif_value(raw: Any) -> Any:
         return raw.decode("utf-8", errors="replace").rstrip("\x00")
     if isinstance(raw, tuple) and len(raw) == 2 and isinstance(raw[0], int):
         return f"{raw[0]}/{raw[1]}" if raw[1] != 0 else str(raw[0])
-    if isinstance(raw, list):
+    if isinstance(raw, (list, tuple)):
         return [_decode_exif_value(v) for v in raw]
     return raw
+
+
+def _encode_exif_value(value: Any, tag_type: int) -> Any:
+    """Convert the displayed EXIF value back to its actual TIFF data type."""
+    if tag_type == 2:  # ASCII
+        if not isinstance(value, str):
+            raise ValueError("EXIF text must be a string")
+        return value.encode("utf-8")
+    if isinstance(value, str) and value.strip().startswith("["):
+        value = json.loads(value)
+    if tag_type in {5, 10}:  # unsigned / signed rational
+        def rational(item):
+            try:
+                if isinstance(item, (list, tuple)) and len(item) == 2:
+                    result = Fraction(int(item[0]), int(item[1]))
+                else:
+                    result = Fraction(str(item))
+            except (ValueError, ZeroDivisionError, OverflowError) as exc:
+                raise ValueError("Invalid EXIF rational") from exc
+            if tag_type == 5 and result < 0:
+                raise ValueError("Unsigned EXIF rational cannot be negative")
+            low, high = (0, 2**32 - 1) if tag_type == 5 else (-2**31, 2**31 - 1)
+            if not low <= result.numerator <= high or not 1 <= result.denominator <= high:
+                raise ValueError("EXIF rational is outside its supported range")
+            return result.numerator, result.denominator
+        if isinstance(value, (list, tuple)) and not (len(value) == 2 and all(isinstance(v, int) for v in value)):
+            return tuple(rational(v) for v in value)
+        return rational(value)
+    if tag_type in {1, 3, 4, 9}:
+        def integer(item):
+            if isinstance(item, bool) or str(int(item)) != str(item):
+                raise ValueError("EXIF numeric tag requires an integer")
+            number = int(item)
+            low, high = {1: (0, 255), 3: (0, 65535), 4: (0, 2**32 - 1), 9: (-2**31, 2**31 - 1)}[tag_type]
+            if not low <= number <= high:
+                raise ValueError("EXIF integer is outside its supported range")
+            return number
+        return tuple(integer(v) for v in value) if isinstance(value, (list, tuple)) else integer(value)
+    raise ValueError("This EXIF data type is read-only")

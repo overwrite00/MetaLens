@@ -1,21 +1,24 @@
-let _port = null
+let _connection = null
 
-async function getPort() {
-  if (_port) return _port
-  if (window.electronAPI) {
-    _port = await window.electronAPI.getPort()
-  } else {
-    _port = 57321 // fallback for browser dev
+async function getConnection() {
+  if (_connection) return _connection
+  if (!window.electronAPI?.getSidecarConnection) {
+    throw new Error('Open MetaLens through Electron to connect to the authenticated sidecar')
   }
-  return _port
+  const connection = await window.electronAPI.getSidecarConnection()
+  if (!Number.isInteger(connection?.port) || connection.port < 1 || connection.port > 65535 || !connection.token) {
+    throw new Error('Invalid sidecar connection')
+  }
+  _connection = connection
+  return connection
 }
 
 async function api(method, path, body = null) {
-  const port = await getPort()
+  const { port, token } = await getConnection()
   const url = `http://127.0.0.1:${port}${path}`
   const opts = {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
   }
   if (body !== null) opts.body = JSON.stringify(body)
   const res = await fetch(url, opts)
