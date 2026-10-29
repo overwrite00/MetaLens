@@ -79,7 +79,7 @@ cd MetaLens-linux-x64
 > [!NOTE]
 > 📖 Replace `vX.Y.Z` / `<version>` with the version shown on the [Releases](../../../releases)
 > page (a stable release is `X.Y.Z`; a beta is `X.Y.Z-beta.N`, and its `.rpm` is named
-> `metalens-X.Y.ZbetaN-1.x86_64.rpm`).
+> `metalens-X.Y.Zbeta.N-1.x86_64.rpm`).
 
 ---
 
