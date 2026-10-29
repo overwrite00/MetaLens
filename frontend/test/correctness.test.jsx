@@ -222,13 +222,17 @@ test('hash copy reports success only after clipboard resolves and handles denial
   vi.unstubAllGlobals()
 })
 
-test('refresh resets expanded nodes and folder loading uses the shared API', async () => {
+test('refresh keeps expanded nodes and selection, re-reads folders and notifies the parent', async () => {
   window.electronAPI = { listDrives: vi.fn().mockResolvedValue(['C:\\']), homeDir: vi.fn().mockResolvedValue('C:\\Users') }
-  metalens.list.mockResolvedValue({ items: [{ name: 'child', path: 'C:\\child', is_dir: true }] })
-  render(<FolderPanel onSelectPath={vi.fn()} />); fireEvent.click(await screen.findByText('C:\\'))
+  const onRefresh = vi.fn()
+  metalens.list.mockResolvedValueOnce({ items: [{ name: 'child', path: 'C:\\child', is_dir: true }] })
+    .mockResolvedValueOnce({ items: [{ name: 'child', path: 'C:\\child', is_dir: true }, { name: 'newdir', path: 'C:\\newdir', is_dir: true }] })
+  render(<FolderPanel onSelectPath={vi.fn()} onRefresh={onRefresh} />); fireEvent.click(await screen.findByText('C:\\'))
   await screen.findByText('child'); fireEvent.click(screen.getByText('Refresh'))
-  await waitFor(() => expect(screen.queryByText('child')).toBeNull())
-  fireEvent.click(screen.getByText('C:\\')); await screen.findByText('child'); expect(metalens.list).toHaveBeenCalledTimes(2)
+  await screen.findByText('newdir')
+  expect(screen.getByText('child')).toBeTruthy()
+  expect(metalens.list).toHaveBeenCalledTimes(2)
+  await waitFor(() => expect(onRefresh).toHaveBeenCalledTimes(1))
 })
 
 test('folder errors are visible and retry loads children', async () => {
