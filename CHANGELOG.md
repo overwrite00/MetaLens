@@ -17,7 +17,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - The folder panel **Refresh** button no longer collapses the tree and drops the current
   folder. It now re-reads the drive list and every expanded folder (keeping expansion and
   selection), and reloads the file list of the selected folder, keeping the still-existing file
-  selection.
+  selection. If the selected folder was deleted or renamed, the selection moves to the nearest
+  existing parent folder; folders that are listed but temporarily unreadable keep their state.
 
 ### CI/CD
 - Prepare the release pipeline for GitHub moving `ubuntu-latest` to Ubuntu 26.04 (rollout

@@ -76,19 +76,20 @@ export function FolderPanel({ onSelectPath, onRefresh }) {
 
   // Re-read the tree keeping expansion and selection: reload the children of every
   // loaded folder (and the drive list), then tell the parent to reload the file list.
+  // A folder that vanished disappears with its parent's listing; one that is listed but
+  // unreadable keeps its previous state. A vanished selection falls back to the nearest
+  // existing ancestor.
   async function refresh() {
     if (!tree.length) { await initRoots(); return }
     const version = ++generation.current
     requests.current.clear()
     setError(null)
-    const failed = []
     async function reloadChildren(node) {
       let data
       try {
         data = await metalens.list(node.path)
       } catch {
-        failed.push(node.path)  // folder gone or unreadable: collapse it
-        return { ...node, children: null, loading: false }
+        return node
       }
       const old = new Map((node.children || []).map(c => [c.path, c]))
       const children = await Promise.all((data.items || []).filter(i => i.is_dir).map(async i => {
@@ -109,8 +110,18 @@ export function FolderPanel({ onSelectPath, onRefresh }) {
       }
       const next = await Promise.all(roots.map(r => r.children ? reloadChildren(r) : r))
       if (version !== generation.current) return
+      const paths = new Set()
+      ;(function collect(nodes) { nodes.forEach(n => { paths.add(n.path); if (n.children) collect(n.children) }) })(next)
       setTree(next)
-      if (failed.length) setExpanded(e => Object.fromEntries(Object.entries(e).filter(([p]) => !failed.includes(p))))
+      setExpanded(e => Object.fromEntries(Object.entries(e).filter(([p]) => paths.has(p))))
+      if (selected && !paths.has(selected)) {
+        const alive = await nearestExisting(selected)
+        if (version !== generation.current) return
+        if (alive !== selected) {
+          setSelected(alive)
+          if (alive) onSelectPath(alive)
+        }
+      }
     } catch (e) {
       if (version === generation.current) setError(e.message)
     }
@@ -198,4 +209,23 @@ function updateNode(nodes, targetPath, updater) {
     if (n.children) return { ...n, children: updateNode(n.children, targetPath, updater) }
     return n
   })
+}
+
+// Walk up from `path` to the closest folder the sidecar can still list.
+async function nearestExisting(path) {
+  let p = path
+  while (p) {
+    try {
+      await metalens.list(p)
+      return p
+    } catch {
+      const i = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'))
+      if (i < 0) return null
+      let parent = i === 0 ? '/' : p.slice(0, i)
+      if (/^[A-Za-z]:$/.test(parent)) parent += '\\'
+      if (parent === p) return null
+      p = parent
+    }
+  }
+  return null
 }

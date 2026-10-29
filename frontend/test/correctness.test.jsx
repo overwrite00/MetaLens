@@ -235,6 +235,24 @@ test('refresh keeps expanded nodes and selection, re-reads folders and notifies 
   await waitFor(() => expect(onRefresh).toHaveBeenCalledTimes(1))
 })
 
+test('refresh moves a vanished selection to the nearest existing ancestor and keeps unreadable folders', async () => {
+  window.electronAPI = { listDrives: vi.fn().mockResolvedValue(['C:\\']), homeDir: vi.fn().mockResolvedValue('C:\\Users') }
+  const onSelectPath = vi.fn(), onRefresh = vi.fn()
+  metalens.list.mockImplementation(async path => {
+    if (path === 'C:\\') return metalens.list.drive
+    if (path === 'C:\\a') throw new Error('gone')
+    return { items: [] }
+  })
+  metalens.list.drive = { items: [{ name: 'a', path: 'C:\\a', is_dir: true }] }
+  render(<FolderPanel onSelectPath={onSelectPath} onRefresh={onRefresh} />)
+  fireEvent.click(await screen.findByText('C:\\')); fireEvent.click(await screen.findByText('a'))
+  metalens.list.drive = { items: [] }
+  fireEvent.click(screen.getByText('Refresh'))
+  await waitFor(() => expect(onRefresh).toHaveBeenCalledTimes(1))
+  expect(screen.queryByText('a')).toBeNull()
+  expect(onSelectPath).toHaveBeenLastCalledWith('C:\\')
+})
+
 test('folder errors are visible and retry loads children', async () => {
   window.electronAPI = { listDrives: vi.fn().mockResolvedValue(['C:\\']), homeDir: vi.fn().mockResolvedValue('C:\\Users') }
   metalens.list.mockRejectedValueOnce(new Error('Access denied')).mockResolvedValueOnce({ items: [{ name: 'child', path: 'C:\\child', is_dir: true }] })
