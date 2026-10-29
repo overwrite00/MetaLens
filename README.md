@@ -31,7 +31,7 @@
 
 ### 🪟 Windows / 🐧 Linux
 
-1. Grab the latest installer for your platform from [Releases](../../releases)
+1. Grab the latest installer for your platform from [Releases](../../releases) — on Linux pick the package for your distribution (`ubuntu24`, `ubuntu26` or `.rpm`, see [INSTALLATION.md](docs/INSTALLATION.md))
 2. Run it — Windows SmartScreen may warn since the build is unsigned; click **"More info" → "Run anyway"**
 3. MetaLens opens with a folder tree on the left — click a folder, then a file, to see its metadata
 
@@ -81,7 +81,9 @@ File (image / audio / video / document / anything)
 
 ## 🔧 Version
 
-**v0.3.4** — Security and maintenance release: the build toolchain moves to Electron Forge 8 (resolving the open `extract-zip` advisories), closing the app no longer leaves the background sidecar process running, and dependencies are updated (uvicorn, pypdf, lucide-react, Vite, Electron). No API changes.
+**v0.3.5** — Security and reliability release: every sidecar API call is authenticated with a per-session token, the Electron renderer is sandboxed with a Content Security Policy, PDF/Office edits preserve unrelated content, audio/video edits are atomic, and Undo restores original values. Dependencies updated (Pillow, pypdf, Vite, Electron). No API changes.
+
+**Next (beta)** — Linux packages are now built per distribution: `.deb`/`.tar.gz` for Ubuntu 24.04 and 26.04, and an `.rpm` built on a RHEL 9 baseline for Fedora and RHEL 9/10.
 
 📖 **See full version history** → [CHANGELOG.md](./CHANGELOG.md)
 
@@ -89,7 +91,7 @@ File (image / audio / video / document / anything)
 
 ## 📋 System Requirements
 
-- **Windows** 10/11 (64-bit) or a modern **Linux** distro (`.deb`/`.rpm`/`.tar.gz`)
+- **Windows** 10/11 (64-bit) or **Linux**: Ubuntu 24.04 / 26.04 (`.deb`/`.tar.gz`, one build per release), Fedora and RHEL 9/10 (`.rpm`) — see [REQUIREMENTS.md](docs/REQUIREMENTS.md)
 - **RAM** 512 MB free
 - **Disk** ~300 MB installed
 - No Python or Node.js needed to *run* the app — only to build it from source
@@ -238,5 +240,5 @@ Distributed with MIT License · [View License](LICENSE)
 
 ---
 
-*Last updated: 2026-10-27*
+*Last updated: 2026-10-29*
 *← [Requirements](docs/REQUIREMENTS.md) | [Docs →](docs/)*

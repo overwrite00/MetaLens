@@ -33,31 +33,53 @@ Step-by-step instructions for installing MetaLens on Windows and Linux, plus bui
 
 ## 🐧 Linux Installation
 
+MetaLens bundles a Python sidecar built against the C library (glibc) of the system that produced
+the package, so each release ships **one package per Linux family**. Pick the one that matches
+your distribution:
+
+| Your distribution | Package to download |
+|---|---|
+| Ubuntu 24.04 LTS, Debian 13 and other distros as recent as Ubuntu 24.04 | `…-ubuntu24.deb` or `…-ubuntu24.tar.gz` |
+| Ubuntu 26.04 LTS and newer | `…-ubuntu26.deb` or `…-ubuntu26.tar.gz` |
+| Fedora (current releases), RHEL 9 / 10 and compatible (Rocky, AlmaLinux) | `metalens-<version>-1.x86_64.rpm` |
+
+> [!NOTE]
+> A package built on a newer system does not start on an older one, so do not install the
+> `ubuntu26` build on Ubuntu 24.04. The `ubuntu24` build also runs on Ubuntu 26.04. The `.rpm`
+> is built on RHEL 9, the oldest supported baseline. Packages are not tested on every
+> distribution; if the app opens but the file list never loads, see [Troubleshooting](#-troubleshooting).
+
 ### 📦 Debian / Ubuntu (`.deb`)
 
 ```bash
-wget https://github.com/overwrite00/MetaLens/releases/download/vX.Y.Z/MetaLens-vX.Y.Z-Linux.deb
-sudo apt install ./MetaLens-vX.Y.Z-Linux.deb
+# Ubuntu 24.04 — use the "ubuntu26" file on Ubuntu 26.04
+wget https://github.com/overwrite00/MetaLens/releases/download/vX.Y.Z/<deb-file>
+sudo apt install ./<deb-file>
 ```
+
+`<deb-file>` is the `.deb` ending in `-ubuntu24.deb` (or `-ubuntu26.deb`) listed on the
+[Releases](../../../releases) page.
 
 ### 📦 Fedora / RHEL (`.rpm`)
 
 ```bash
-wget https://github.com/overwrite00/MetaLens/releases/download/vX.Y.Z/MetaLens-vX.Y.Z-Linux.rpm
-sudo rpm -i MetaLens-vX.Y.Z-Linux.rpm
+wget https://github.com/overwrite00/MetaLens/releases/download/vX.Y.Z/metalens-<version>-1.x86_64.rpm
+sudo dnf install ./metalens-<version>-1.x86_64.rpm
 ```
 
 ### 📦 Any distro (`.tar.gz`)
 
 ```bash
-wget https://github.com/overwrite00/MetaLens/releases/download/vX.Y.Z/MetaLens-vX.Y.Z-Linux.tar.gz
-tar -xzf MetaLens-vX.Y.Z-Linux.tar.gz
-cd MetaLens-vX.Y.Z-Linux
+wget https://github.com/overwrite00/MetaLens/releases/download/vX.Y.Z/MetaLens-<version>-ubuntu24.tar.gz
+tar -xzf MetaLens-<version>-ubuntu24.tar.gz
+cd MetaLens-linux-x64
 ./metalens
 ```
 
 > [!NOTE]
-> 📖 Replace `vX.Y.Z` with the version shown on the [Releases](../../../releases) page.
+> 📖 Replace `vX.Y.Z` / `<version>` with the version shown on the [Releases](../../../releases)
+> page (a stable release is `X.Y.Z`; a beta is `X.Y.Z-beta.N`, and its `.rpm` is named
+> `metalens-X.Y.ZbetaN-1.x86_64.rpm`).
 
 ---
 
@@ -103,6 +125,12 @@ cd ../electron && npm run make
 
 `npm run make` (Electron Forge) produces the Windows `.exe`, Linux `.deb`/`.rpm` under `electron/out/make/`.
 
+> [!NOTE]
+> The sidecar embeds the glibc of the machine that builds it, so a locally built package only runs
+> on systems at least as recent as yours. To build the `.rpm` you need `rpmbuild` (`rpm-build`);
+> `electron-installer-redhat` 4.0.0 fails with RPM 4.20 or newer (including RPM 6), so build it on
+> a RHEL 9-compatible system or container, as the release pipeline does.
+
 ---
 
 ## 🔧 Troubleshooting
@@ -128,9 +156,9 @@ sudo apt --fix-broken install   # Debian/Ubuntu, after a failed .deb install
 
 ### ❌ App window opens but the file list never loads
 
-**Cause:** The Python sidecar failed to start (rare — usually a port conflict or antivirus blocking the bundled executable).
+**Cause:** The Python sidecar failed to start (rare — usually a port conflict or antivirus blocking the bundled executable). On Linux it can also be the wrong package for your distribution: the sidecar needs a glibc at least as recent as the one it was built on, and fails with `version 'GLIBC_2.xx' not found` otherwise.
 
-**Solution:** Restart the app. If it persists, check that no other process is holding the port MetaLens tries to bind on `127.0.0.1`, and confirm your antivirus isn't quarantining `metalens-sidecar.exe`.
+**Solution:** Restart the app. On Linux, launch `metalens` from a terminal to see the sidecar's error message, and install the package that matches your distribution (see the table above). If it persists, check that no other process is holding the port MetaLens tries to bind on `127.0.0.1`, and confirm your antivirus isn't quarantining `metalens-sidecar.exe`.
 
 ---
 
@@ -149,5 +177,5 @@ sudo apt --fix-broken install   # Debian/Ubuntu, after a failed .deb install
 
 ---
 
-*Last updated: 2026-10-05*
+*Last updated: 2026-10-29*
 *← [Requirements](./REQUIREMENTS.md) | [Usage →](./USAGE.md)*
