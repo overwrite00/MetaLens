@@ -220,7 +220,18 @@ jobs:
   build-linux-beta:
     if: github.ref == 'refs/heads/develop'
     needs: get-version-beta
-    runs-on: ubuntu-latest
+    name: build-linux-beta (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    # One .deb/.tar.gz per Ubuntu LTS: the PyInstaller sidecar embeds the glibc of the build
+    # image, so a 26.04 build does not run on 24.04. Do not collapse back to ubuntu-latest.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            label: ubuntu24
+          - os: ubuntu-26.04
+            label: ubuntu26
     permissions:
       contents: read
     env:
@@ -228,7 +239,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Install system dependencies
-        run: sudo apt-get update -qq && sudo apt-get install -y rpm fakeroot
+        run: sudo apt-get update -qq && sudo apt-get install -y fakeroot
       - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
@@ -264,8 +275,6 @@ jobs:
         run: |
           cd electron
           npm version ${{ needs.get-version-beta.outputs.beta_version }} --no-git-tag-version --allow-same-version
-      - name: Configure RPM macros
-        run: echo '%_build_id_links none' >> ~/.rpmmacros
       - name: Cache Electron download
         uses: actions/cache@v6
         with:
@@ -275,31 +284,120 @@ jobs:
         run: |
           cd electron
           npm ci --include=dev
-          npx electron-forge make
+          # .rpm is built separately in a RHEL container (build-rpm-beta): rpm 6 on
+          # ubuntu-26.04 breaks electron-installer-redhat.
+          npx electron-forge make --targets @electron-forge/maker-deb
       - name: Create Linux tar.gz
         run: |
           VERSION=${{ needs.get-version-beta.outputs.beta_version }}
           APP_DIR=$(find electron/out -maxdepth 1 -type d -name "MetaLens-linux-*" | head -1)
           if [ -n "$APP_DIR" ]; then
-            tar -czf "electron/out/make/MetaLens-${VERSION}-Linux.tar.gz" \
+            tar -czf "electron/out/make/MetaLens-${VERSION}-${{ matrix.label }}.tar.gz" \
               -C "$(dirname "$APP_DIR")" "$(basename "$APP_DIR")"
-            echo "Created MetaLens-${VERSION}-Linux.tar.gz"
+            echo "Created MetaLens-${VERSION}-${{ matrix.label }}.tar.gz"
           else
             echo "Warning: no MetaLens-linux-* directory found, skipping tar.gz"
           fi
+      - name: Tag .deb with the build distro
+        run: |
+          find electron/out/make -type f -name '*.deb' | while read -r f; do
+            mv "$f" "${f%.deb}-${{ matrix.label }}.deb"
+          done
       - name: Upload Linux beta artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: linux-packages-beta
+          name: linux-packages-beta-${{ matrix.label }}
           path: |
             electron/out/make/**/*.deb
-            electron/out/make/**/*.rpm
             electron/out/make/**/*.tar.gz
+          if-no-files-found: error
+
+  # RPM built inside a RHEL 9 container (glibc 2.34): the sidecar embeds the build image's
+  # glibc, so the oldest supported baseline yields a package that also runs on RHEL 10 and
+  # current Fedora. rpm 4.16 here also avoids the electron-installer-redhat vs rpm >= 4.20 bug.
+  build-rpm-beta:
+    if: github.ref == 'refs/heads/develop'
+    needs: get-version-beta
+    runs-on: ubuntu-24.04
+    container: rockylinux:9
+    permissions:
+      contents: read
+    env:
+      ELECTRON_CACHE: ${{ github.workspace }}/.electron-cache
+    steps:
+      - name: Install system dependencies
+        run: dnf install -y git tar gzip xz which findutils binutils rpm-build python3-pip
+      - uses: actions/checkout@v7
+      - name: Set up Python 3.13 (uv)
+        run: |
+          # RHEL 9 AppStream has no python3.13; uv installs a python-build-standalone one.
+          python3 -m pip install uv==0.8.0
+          uv python install 3.13
+          uv venv --python 3.13 /opt/venv
+          echo "/opt/venv/bin" >> "$GITHUB_PATH"
+          echo "VIRTUAL_ENV=/opt/venv" >> "$GITHUB_ENV"
+      - name: Show toolchain
+        run: |
+          python --version
+          rpmbuild --version
+          ldd --version | head -1
+      - name: Build Python sidecar
+        run: |
+          cd python
+          uv pip install -r requirements.txt -q
+          uv pip install pyinstaller -q
+          python -m PyInstaller main.py --onefile --name metalens-sidecar --distpath dist --clean --noconfirm \
+            --hidden-import piexif \
+            --hidden-import mutagen \
+            --hidden-import hachoir \
+            --hidden-import olefile \
+            --hidden-import openpyxl \
+            --hidden-import docx \
+            --hidden-import pptx \
+            --hidden-import pypdf
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build React frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+      - name: Copy frontend dist into electron
+        run: cp -r frontend/dist electron/frontend
+      - name: Sync electron version to beta
+        run: |
+          cd electron
+          npm version ${{ needs.get-version-beta.outputs.beta_version }} --no-git-tag-version --allow-same-version
+      - name: Configure RPM macros
+        run: echo '%_build_id_links none' >> ~/.rpmmacros
+      - name: Cache Electron download
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.ELECTRON_CACHE }}
+          key: electron-${{ runner.os }}-${{ hashFiles('electron/package-lock.json') }}
+      - name: Package RPM with Electron Forge
+        run: |
+          cd electron
+          npm ci --include=dev
+          npx electron-forge make --targets @electron-forge/maker-rpm
+      - name: Show RPM requirements
+        run: |
+          for f in $(find electron/out/make -type f -name '*.rpm'); do
+            echo "== $f"; rpm -qpR "$f"
+          done
+      - name: Upload RPM beta artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-rpm-beta
+          path: electron/out/make/**/*.rpm
           if-no-files-found: error
 
   release-beta:
     if: github.ref == 'refs/heads/develop'
-    needs: [get-version-beta, build-windows-beta, build-linux-beta]
+    needs: [get-version-beta, build-windows-beta, build-linux-beta, build-rpm-beta]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -349,7 +447,8 @@ jobs:
           make_latest: false
           files: |
             artifacts/windows-installer-beta/**
-            artifacts/linux-packages-beta/**
+            artifacts/linux-packages-beta-*/**
+            artifacts/linux-rpm-beta/**
 
   # ─────────────────────────────────────────────────────────────────────────────
   # STABLE RELEASE (main only) — Rebuild from main with stable metadata
@@ -477,7 +576,18 @@ jobs:
   build-linux-stable:
     if: github.ref == 'refs/heads/main'
     needs: [get-version, find-latest-beta]
-    runs-on: ubuntu-latest
+    name: build-linux-stable (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    # One .deb/.tar.gz per Ubuntu LTS: the PyInstaller sidecar embeds the glibc of the build
+    # image, so a 26.04 build does not run on 24.04. Do not collapse back to ubuntu-latest.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            label: ubuntu24
+          - os: ubuntu-26.04
+            label: ubuntu26
     permissions:
       contents: read
     env:
@@ -485,7 +595,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Install system dependencies
-        run: sudo apt-get update -qq && sudo apt-get install -y rpm fakeroot
+        run: sudo apt-get update -qq && sudo apt-get install -y fakeroot
       - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
@@ -517,8 +627,6 @@ jobs:
           npm run build
       - name: Copy frontend dist into electron
         run: cp -r frontend/dist electron/frontend
-      - name: Configure RPM macros
-        run: echo '%_build_id_links none' >> ~/.rpmmacros
       - name: Cache Electron download
         uses: actions/cache@v6
         with:
@@ -528,18 +636,25 @@ jobs:
         run: |
           cd electron
           npm ci --include=dev
-          npx electron-forge make
+          # .rpm is built separately in a RHEL container (build-rpm-stable): rpm 6 on
+          # ubuntu-26.04 breaks electron-installer-redhat.
+          npx electron-forge make --targets @electron-forge/maker-deb
       - name: Create Linux tar.gz
         run: |
           VERSION=${{ needs.get-version.outputs.version }}
           APP_DIR=$(find electron/out -maxdepth 1 -type d -name "MetaLens-linux-*" | head -1)
           if [ -n "$APP_DIR" ]; then
-            tar -czf "electron/out/make/MetaLens-${VERSION}-Linux.tar.gz" \
+            tar -czf "electron/out/make/MetaLens-${VERSION}-${{ matrix.label }}.tar.gz" \
               -C "$(dirname "$APP_DIR")" "$(basename "$APP_DIR")"
-            echo "Created MetaLens-${VERSION}-Linux.tar.gz"
+            echo "Created MetaLens-${VERSION}-${{ matrix.label }}.tar.gz"
           else
             echo "Warning: no MetaLens-linux-* directory found, skipping tar.gz"
           fi
+      - name: Tag .deb with the build distro
+        run: |
+          find electron/out/make -type f -name '*.deb' | while read -r f; do
+            mv "$f" "${f%.deb}-${{ matrix.label }}.deb"
+          done
       - name: Verify Linux artifacts use stable version
         run: |
           if find electron/out -type f -name '*beta*' | grep -q .; then
@@ -550,16 +665,101 @@ jobs:
       - name: Upload Linux stable artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: linux-packages-stable
+          name: linux-packages-stable-${{ matrix.label }}
           path: |
             electron/out/make/**/*.deb
-            electron/out/make/**/*.rpm
             electron/out/make/**/*.tar.gz
+          if-no-files-found: error
+
+  # RPM built inside a RHEL 9 container (glibc 2.34): the sidecar embeds the build image's
+  # glibc, so the oldest supported baseline yields a package that also runs on RHEL 10 and
+  # current Fedora. rpm 4.16 here also avoids the electron-installer-redhat vs rpm >= 4.20 bug.
+  build-rpm-stable:
+    if: github.ref == 'refs/heads/main'
+    needs: [get-version, find-latest-beta]
+    runs-on: ubuntu-24.04
+    container: rockylinux:9
+    permissions:
+      contents: read
+    env:
+      ELECTRON_CACHE: ${{ github.workspace }}/.electron-cache
+    steps:
+      - name: Install system dependencies
+        run: dnf install -y git tar gzip xz which findutils binutils rpm-build python3-pip
+      - uses: actions/checkout@v7
+      - name: Set up Python 3.13 (uv)
+        run: |
+          # RHEL 9 AppStream has no python3.13; uv installs a python-build-standalone one.
+          python3 -m pip install uv==0.8.0
+          uv python install 3.13
+          uv venv --python 3.13 /opt/venv
+          echo "/opt/venv/bin" >> "$GITHUB_PATH"
+          echo "VIRTUAL_ENV=/opt/venv" >> "$GITHUB_ENV"
+      - name: Show toolchain
+        run: |
+          python --version
+          rpmbuild --version
+          ldd --version | head -1
+      - name: Build Python sidecar
+        run: |
+          cd python
+          uv pip install -r requirements.txt -q
+          uv pip install pyinstaller -q
+          python -m PyInstaller main.py --onefile --name metalens-sidecar --distpath dist --clean --noconfirm \
+            --hidden-import piexif \
+            --hidden-import mutagen \
+            --hidden-import hachoir \
+            --hidden-import olefile \
+            --hidden-import openpyxl \
+            --hidden-import docx \
+            --hidden-import pptx \
+            --hidden-import pypdf
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build React frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+      - name: Copy frontend dist into electron
+        run: cp -r frontend/dist electron/frontend
+      - name: Configure RPM macros
+        run: echo '%_build_id_links none' >> ~/.rpmmacros
+      - name: Cache Electron download
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.ELECTRON_CACHE }}
+          key: electron-${{ runner.os }}-${{ hashFiles('electron/package-lock.json') }}
+      - name: Package RPM with Electron Forge
+        run: |
+          cd electron
+          npm ci --include=dev
+          npx electron-forge make --targets @electron-forge/maker-rpm
+      - name: Show RPM requirements
+        run: |
+          for f in $(find electron/out/make -type f -name '*.rpm'); do
+            echo "== $f"; rpm -qpR "$f"
+          done
+      - name: Verify RPM artifacts use stable version
+        run: |
+          if find electron/out -type f -name '*beta*' | grep -q .; then
+            find electron/out -type f -name '*beta*'
+            echo "::error::Stable build produced beta-named artifacts."
+            exit 1
+          fi
+      - name: Upload RPM stable artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-rpm-stable
+          path: electron/out/make/**/*.rpm
           if-no-files-found: error
 
   release-stable:
     if: github.ref == 'refs/heads/main'
-    needs: [get-version, find-latest-beta, build-windows-stable, build-linux-stable]
+    needs: [get-version, find-latest-beta, build-windows-stable, build-linux-stable, build-rpm-stable]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -606,4 +806,5 @@ jobs:
           make_latest: true
           files: |
             artifacts/windows-installer-stable/**
-            artifacts/linux-packages-stable/**
+            artifacts/linux-packages-stable-*/**
+            artifacts/linux-rpm-stable/**
