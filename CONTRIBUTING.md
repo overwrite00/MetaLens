@@ -190,7 +190,7 @@ Preview what a release will say with `python scripts/changelog_notes.py X.Y.Z`.
 
 ### Linux packages
 
-Linux jobs in `.github/workflows/build.yml` are pinned, not `ubuntu-latest`: the PyInstaller sidecar embeds the glibc of the build image. `.deb` and `.tar.gz` come from a matrix on `ubuntu-24.04` and `ubuntu-26.04` (files suffixed `-ubuntu24` / `-ubuntu26`), and the `.rpm` is built in a `rockylinux:9` container (glibc 2.34, rpm 4.16). Do not build the `.rpm` on `ubuntu-26.04`: RPM 6 breaks `electron-installer-redhat` 4.0.0. A workflow change can be tried without publishing a release by dispatching `build.yml` from a temporary branch whose job conditions are relaxed.
+The PyInstaller sidecar embeds the glibc of the machine that builds it, so the Linux jobs in `.github/workflows/build.yml` never use `ubuntu-latest` for it. `build-sidecar-linux-*` builds the sidecar once in a `rockylinux:9` container (glibc 2.34, Python 3.13 from `uv`); `build-linux-*` (`.deb` and `.tar.gz`, on `ubuntu-24.04`) and `build-rpm-*` (`.rpm`, in the same container) reuse it. Do not build the `.rpm` on `ubuntu-26.04`: RPM 6 breaks `electron-installer-redhat` 4.0.0. A workflow change can be tried without publishing a release by dispatching `build.yml` from a temporary branch whose job conditions are relaxed.
 
 ---
 

@@ -15,19 +15,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ### CI/CD
 - Prepare the release pipeline for GitHub moving `ubuntu-latest` to Ubuntu 26.04 (rollout
-  2026-10-19 → 2026-11-19). The PyInstaller sidecar embeds the glibc of the build image, so a
-  package built on 26.04 would not start on Ubuntu 24.04.
-- Linux `.deb` and `.tar.gz` are now built by a matrix on `ubuntu-24.04` and `ubuntu-26.04`; file
-  names carry the distro (`…-ubuntu24`, `…-ubuntu26`) and no longer include `Linux`.
-- The `.rpm` is built in a `rockylinux:9` container (glibc 2.34, rpm 4.16) so it runs on RHEL 9/10
-  and current Fedora. Building it on Ubuntu 26.04 fails: RPM 6 breaks
-  `electron-installer-redhat` 4.0.0 and emits RPM v6 packages. Python 3.13 in the container comes
-  from `uv`.
+  2026-10-19 → 2026-11-19). The PyInstaller sidecar embeds the glibc of the build machine: built on
+  `ubuntu-24.04` it needs glibc 2.38 and did not start on Debian 12 or Ubuntu 22.04.
+- The Linux sidecar is now built once in a `rockylinux:9` container (glibc 2.34) and reused by the
+  `.deb`, `.tar.gz` and `.rpm` jobs, so a single set of Linux packages runs on Ubuntu 22.04+,
+  Debian 12+, Fedora and RHEL 9/10. Python 3.13 in the container comes from `uv`.
+- The `.rpm` is built in that same container (rpm 4.16): on Ubuntu 26.04 RPM 6 breaks
+  `electron-installer-redhat` 4.0.0 and emits RPM v6 packages. The `.deb` and `.tar.gz` keep using
+  `ubuntu-24.04`.
+- Linux asset names: `metalens_<version>_amd64.deb`, `metalens-<version>-1.x86_64.rpm`,
+  `MetaLens-<version>-linux-x64.tar.gz`.
 
 ### Documentation
-- Installation and requirements guides describe the per-distribution Linux packages, the supported
-  RHEL/Fedora/Ubuntu versions and the glibc troubleshooting case; `CONTRIBUTING.md` documents why the
-  Linux jobs are pinned.
+- Installation and requirements guides describe the Linux packages, the glibc 2.34 baseline and
+  the glibc troubleshooting case; `CONTRIBUTING.md` documents how the Linux jobs are split.
 
 ---
 
