@@ -3,7 +3,7 @@ import { Folder, FolderOpen, HardDrive, Home, ChevronRight, ChevronDown, Refresh
 import { Button } from './ui/Button'
 import { metalens } from '../api/client'
 
-export function FolderPanel({ onSelectPath }) {
+export function FolderPanel({ onSelectPath, onRefresh }) {
   const [tree, setTree] = useState([])
   const [expanded, setExpanded] = useState({})
   const [selected, setSelected] = useState(null)
@@ -74,6 +74,49 @@ export function FolderPanel({ onSelectPath }) {
     }
   }
 
+  // Re-read the tree keeping expansion and selection: reload the children of every
+  // loaded folder (and the drive list), then tell the parent to reload the file list.
+  async function refresh() {
+    if (!tree.length) { await initRoots(); return }
+    const version = ++generation.current
+    requests.current.clear()
+    setError(null)
+    const failed = []
+    async function reloadChildren(node) {
+      let data
+      try {
+        data = await metalens.list(node.path)
+      } catch {
+        failed.push(node.path)  // folder gone or unreadable: collapse it
+        return { ...node, children: null, loading: false }
+      }
+      const old = new Map((node.children || []).map(c => [c.path, c]))
+      const children = await Promise.all((data.items || []).filter(i => i.is_dir).map(async i => {
+        const prev = old.get(i.path)
+        const fresh = { name: i.name, path: i.path, type: 'dir', children: null, loading: false }
+        return prev && prev.children ? reloadChildren(prev) : fresh
+      }))
+      return { ...node, children, loading: false }
+    }
+    try {
+      let roots = tree
+      if (window.electronAPI) {
+        const drives = await window.electronAPI.listDrives()
+        const known = new Map(tree.map(n => [n.path, n]))
+        roots = drives.length
+          ? drives.map(d => known.get(d) || { name: d, path: d, type: 'drive', children: null, loading: false })
+          : tree
+      }
+      const next = await Promise.all(roots.map(r => r.children ? reloadChildren(r) : r))
+      if (version !== generation.current) return
+      setTree(next)
+      if (failed.length) setExpanded(e => Object.fromEntries(Object.entries(e).filter(([p]) => !failed.includes(p))))
+    } catch (e) {
+      if (version === generation.current) setError(e.message)
+    }
+    if (version === generation.current) onRefresh?.()
+  }
+
   function select(path) {
     setSelected(path)
     onSelectPath(path)
@@ -107,7 +150,7 @@ export function FolderPanel({ onSelectPath }) {
 
       {/* Refresh */}
       <div className="p-2 border-t border-cyber-border">
-        <Button variant="ghost" size="xs" onClick={initRoots} className="w-full justify-center">
+        <Button variant="ghost" size="xs" onClick={refresh} className="w-full justify-center">
           <RefreshCw size={11} /> Refresh
         </Button>
       </div>

@@ -17,6 +17,7 @@ export default function App() {
   const [undoMsg, setUndoMsg]           = useState(null)
   const { push: undoPush, undo, canUndo, runExclusive, busy } = useUndoStack()
   const [reloadKey, setReloadKey] = useState(0)
+  const [filesReloadKey, setFilesReloadKey] = useState(0)
 
   // Splitter widths (px)
   const [leftW, setLeftW]   = useState(220)
@@ -132,7 +133,8 @@ export default function App() {
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Left: Folder tree */}
         <div style={{ width: leftW, flexShrink: 0 }} className="min-h-0 overflow-hidden">
-          <FolderPanel onSelectPath={handleSelectPath} />
+          <FolderPanel onSelectPath={handleSelectPath}
+            onRefresh={() => setFilesReloadKey(value => value + 1)} />
         </div>
 
         {/* Resize handle L */}
@@ -142,6 +144,7 @@ export default function App() {
         <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
           <FilePanel
             currentPath={currentPath}
+            reloadKey={filesReloadKey}
             onSelectFile={handleSelectFile}
             onSelectTwo={handleSelectTwo}
           />

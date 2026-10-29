@@ -13,6 +13,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - [ ] **Batch Edit** — Apply a field change to multiple selected files at once
 - [ ] **Search/Filter Bar** — Filter the file list by name or extension
 
+### Fixed
+- The folder panel **Refresh** button no longer collapses the tree and drops the current
+  folder. It now re-reads the drive list and every expanded folder (keeping expansion and
+  selection), and reloads the file list of the selected folder, keeping the still-existing file
+  selection.
+
 ### CI/CD
 - Prepare the release pipeline for GitHub moving `ubuntu-latest` to Ubuntu 26.04 (rollout
   2026-10-19 → 2026-11-19). The PyInstaller sidecar embeds the glibc of the build machine: built on
