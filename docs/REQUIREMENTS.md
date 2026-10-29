@@ -28,6 +28,7 @@ Requirements for running the pre-built MetaLens application and, separately, for
 - **Packages:** `.deb` (Debian/Ubuntu), `.rpm` (Fedora/RHEL), `.tar.gz` (any distro) — one set for all distributions
 - **Minimum C library:** glibc 2.34 — the bundled sidecar is built on RHEL 9. This covers Ubuntu 22.04+, Debian 12+, RHEL 9 / 10 (Rocky, AlmaLinux) and current Fedora
 - **Not supported:** RHEL 8 and older (glibc older than 2.34)
+- **Tested:** installing each package and starting the sidecar (not the full desktop window) was verified in containers on Ubuntu 22.04 / 24.04 / 26.04, Debian 12 / 13, Fedora 43 / 44, Rocky Linux 9 and AlmaLinux 10 (`.tar.gz` on Debian 12, Ubuntu 22.04 and Fedora 44)
 
 ### 🍎 macOS
 - **Status:** ❌ Not currently packaged — no macOS build is produced by CI. Building from source with `npm run make` is possible but unverified.
