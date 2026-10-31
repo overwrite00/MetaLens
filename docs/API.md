@@ -36,7 +36,7 @@ Use Vite together with Electron for development; the standalone browser fallback
 
 ## GET `/health`
 
-Health check + version, used by the About dialog and by Electron to know the sidecar is ready.
+Health check + version, used by Electron to know the sidecar is ready. (The About dialog shows the packaged app version from Electron, not this value.)
 
 **Response**
 ```json
@@ -203,5 +203,5 @@ Defined in `python/core/models.py`.
 
 ---
 
-*Last updated: 2026-10-27*
+*Last updated: 2026-10-31*
 *← [Usage](./USAGE.md) | [Back to README →](../README.md)*

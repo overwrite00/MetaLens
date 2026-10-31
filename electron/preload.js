@@ -14,6 +14,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Packaged app version (reflects beta suffix, unlike the sidecar's /health version)
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 
+  // Repository link and update check (all network access happens in the main process)
+  openRepo:            () => ipcRenderer.invoke('open-repo'),
+  getUpdateSettings:   () => ipcRenderer.invoke('updates-get-settings'),
+  setUpdateSettings:   (patch) => ipcRenderer.invoke('updates-set-settings', patch),
+  checkForUpdates:     (options) => ipcRenderer.invoke('updates-check', options),
+  openReleasePage:     () => ipcRenderer.invoke('updates-open-release'),
+  installUpdate:       () => ipcRenderer.invoke('updates-install'),
+  cancelUpdate:        () => ipcRenderer.invoke('updates-cancel'),
+  onUpdateProgress:    (cb) => subscribe('update-progress', cb),
+
   // Native dialogs
   openFolderDialog: () => ipcRenderer.invoke('open-folder-dialog'),
   openFileDialog:   () => ipcRenderer.invoke('open-file-dialog'),
@@ -29,6 +39,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onMenuOpenFolder: (cb) => subscribe('menu-open-folder', cb),
   onMenuUndo:       (cb) => subscribe('menu-undo', cb),
   onMenuAbout:      (cb) => subscribe('menu-about', cb),
+  onMenuCheckUpdates: (cb) => subscribe('menu-check-updates', cb),
 
   // Cleanup
   removeAllListeners: (channel) => {

@@ -51,7 +51,7 @@ Requirements for running the pre-built MetaLens application and, separately, for
 |---|---|
 | **Python** | The sidecar ships as a compiled binary (`metalens-sidecar[.exe]`) inside the installer |
 | **Node.js** | The frontend is pre-built and bundled into the Electron app |
-| **Internet connection** | MetaLens works fully offline — no cloud dependency, no telemetry |
+| **Internet connection** | MetaLens works fully offline — no cloud dependency, no telemetry. A connection is only used for the optional update check |
 | **Admin/root rights** | Windows installer runs per-user (Squirrel); Linux packages install standard desktop entries |
 
 ---
@@ -73,13 +73,13 @@ See [Installation Guide → Build from Source](./INSTALLATION.md#-build-from-sou
 ## 🔒 Data Privacy & Security
 
 > [!IMPORTANT]
-> 🛡️ **Your files never leave your machine.** MetaLens has no network calls of any kind.
+> 🛡️ **Your files never leave your machine.** The only network call MetaLens can make is the update check against GitHub Releases, and only when you ask for it or opt in.
 
 - ✅ **No cloud transmission** — all metadata reads/writes happen locally
 - ✅ **No telemetry** — zero data collection or external tracking
 - ✅ **Localhost-only sidecar** — the Python API binds to `127.0.0.1` only, never `0.0.0.0`
 - ✅ **Open source** — full source code available for audit (MIT license)
-- ✅ **Offline capable** — no internet connection required at any point
+- ✅ **Offline capable** — no internet connection required, except to check for or download a new version
 
 ---
 
@@ -91,5 +91,5 @@ See [Installation Guide → Build from Source](./INSTALLATION.md#-build-from-sou
 
 ---
 
-*Last updated: 2026-10-29*
+*Last updated: 2026-10-31*
 *← [README](../README.md) | [Installation →](./INSTALLATION.md)*

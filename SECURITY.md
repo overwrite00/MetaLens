@@ -4,12 +4,13 @@
 
 MetaLens is designed with security-first principles:
 
-- **Fully offline** — all metadata reading and writing happens on your machine; there is no network call anywhere in the app
+- **Offline by default** — all metadata reading and writing happens on your machine. The only network access is the update check (see below), which runs only when you click *Check for updates* or have enabled the opt-in startup check
 - **Localhost-only sidecar** — the Python (FastAPI) backend binds to `127.0.0.1` only, on a dynamically chosen port, never `0.0.0.0`
 - **Electron hardening** — `nodeIntegration: false`, `contextIsolation: true`, `sandbox: true`; IPC accepts only the application's main frame. Navigation and popups are blocked and a Content Security Policy limits renderer resources
 - **Authenticated sidecar** — a fresh random token is generated for each session, passed to Python through the environment and sent in an Authorization header. Requests without valid credentials are rejected; localhost binding alone is not treated as authentication
 - **Atomic writes** — changes are prepared in a private temporary directory beside the target, with checks for concurrent modification before replacement. Audio and video use the same mechanism. Writer failures leave the original content intact
 - **Path validation** — a dedicated `core.path_security` module validates and normalizes every path (resolves symlinks, blocks traversal) before any filesystem access, across all API routes
+- **Hardened update check** — requests are made by the Electron main process, never by the renderer (whose CSP still only allows the local sidecar). It queries the GitHub Releases API of `overwrite00/MetaLens` only, and the renderer cannot supply URLs. Release and asset URLs must point to that repository, and the installer is downloaded only when you click *Download & install* (Windows installed builds), checked against its size and the SHA-256 digest published by GitHub, and discarded on any mismatch. Release notes are shown as plain text
 - **Transparent code** — all handler and analysis logic is open-source and auditable
 
 ---
@@ -22,7 +23,7 @@ MetaLens is designed with security-first principles:
 - ❌ No telemetry or usage tracking
 - ❌ No data collection or analytics
 - ❌ No cloud processing or storage
-- ❌ No auto-update phone-home (updates are manual, via GitHub Releases)
+- ❌ No automatic phone-home: the update check is manual, or opt-in (off by default) at startup
 
 ### Data Control
 
@@ -106,5 +107,5 @@ We appreciate responsible disclosure and will credit you in the security advisor
 
 ---
 
-*Last updated: 2026-10-27*
+*Last updated: 2026-10-31*
 *← [Contributing](./CONTRIBUTING.md) | [Back to README →](./README.md)*

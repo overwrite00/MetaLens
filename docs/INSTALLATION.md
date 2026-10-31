@@ -70,7 +70,7 @@ cd MetaLens-linux-x64
 
 ## ✅ Verify Installation
 
-Launch MetaLens, then open **Help → About** (or the About dialog) to confirm the version number matches the one you installed — it's read live from the sidecar's `/health` endpoint.
+Launch MetaLens, then open **Help → About** (or the About dialog) to confirm the version number matches the one you installed. To look for a newer release later, see [Updates](./USAGE.md#-updates).
 
 You should see:
 - ✅ A folder tree on the left (drives and home directory)
@@ -162,5 +162,5 @@ sudo apt --fix-broken install   # Debian/Ubuntu, after a failed .deb install
 
 ---
 
-*Last updated: 2026-10-29*
+*Last updated: 2026-10-31*
 *← [Requirements](./REQUIREMENTS.md) | [Usage →](./USAGE.md)*

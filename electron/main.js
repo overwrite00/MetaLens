@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell, net: electronNet } = require('electron')
 const path = require('path')
 const { spawn } = require('child_process')
 const net = require('net')
@@ -9,6 +9,9 @@ const { isTrustedFrame, secureWindow } = require('./security-policy')
 const { waitForSidecar } = require('./sidecar-health')
 const { handleSquirrelEvent } = require('./squirrel-events')
 const { spawnTree, killProcessTree } = require('./process-tree')
+const {
+  REPO_URL, checkForUpdates, downloadAsset, cleanupStaleDownloads, createSettingsStore,
+} = require('./update-check')
 
 // ─────────────────────── Windows/Squirrel install & update events ────────────
 // Squirrel (electron-forge maker-squirrel) launches the app with special flags
@@ -36,6 +39,10 @@ app.commandLine.appendSwitch('safebrowsing-disable-auto-update')
 let mainWindow = null
 let sidecarProcess = null
 let sidecarPort = null
+let settingsStore = null
+let lastUpdate = null
+let checkInFlight = null
+let installAbort = null
 const sidecarToken = randomBytes(32).toString('hex')
 const trustedURL = app.isPackaged
   ? pathToFileURL(path.join(__dirname, 'frontend', 'index.html')).href
@@ -102,6 +109,81 @@ function stopSidecar() {
   }
 }
 
+// ─────────────────────── Update check ────────────────────────────────────────
+// All network access lives here, never in the renderer (its CSP only allows the
+// local sidecar). Nothing runs unless the user clicks "Check for updates" or has
+// opted in to the startup check; the renderer never supplies URLs — install
+// always uses the release picked by the last check.
+
+const electronFetch = (...args) => electronNet.fetch(...args)
+
+function describeNetworkError(error) {
+  if (error?.name === 'TimeoutError' || error?.name === 'AbortError') return 'The request timed out'
+  return error?.message || String(error)
+}
+
+function canInstallUpdate(update) {
+  return Boolean(update?.asset) && app.isPackaged && process.platform === 'win32'
+}
+
+function updateView(update) {
+  if (!update) return null
+  return {
+    version: update.version,
+    channel: update.channel,
+    notes: update.notes,
+    publishedAt: update.publishedAt,
+    canInstall: canInstallUpdate(update),
+    ignored: settingsStore.get().ignoredVersion === update.version,
+  }
+}
+
+async function runUpdateCheck({ auto = false } = {}) {
+  if (auto && !settingsStore.get().autoCheckUpdates) return { skipped: true }
+  try {
+    if (!checkInFlight) {
+      checkInFlight = checkForUpdates({ fetch: electronFetch, currentVersion: app.getVersion() })
+        .finally(() => { checkInFlight = null })
+    }
+    lastUpdate = await checkInFlight
+    return { currentVersion: app.getVersion(), update: updateView(lastUpdate) }
+  } catch (error) {
+    return { error: describeNetworkError(error) }
+  }
+}
+
+function launchInstaller(file) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(file, [], { detached: true, stdio: 'ignore' })
+    child.once('error', reject)
+    child.once('spawn', () => { child.unref(); resolve() })
+  })
+}
+
+async function installUpdate() {
+  if (installAbort) return { error: 'An update is already being downloaded' }
+  const update = lastUpdate
+  if (!canInstallUpdate(update)) return { error: 'Automatic installation is not available for this build' }
+  const controller = installAbort = new AbortController()
+  let lastPercent = -1
+  const onProgress = ({ received, total }) => {
+    const percent = Math.floor(received / total * 100)
+    if (percent === lastPercent) return
+    lastPercent = percent
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-progress', { received, total })
+  }
+  try {
+    const { file } = await downloadAsset({ fetch: electronFetch, asset: update.asset, signal: controller.signal, onProgress })
+    await launchInstaller(file)
+    app.quit()
+    return { ok: true }
+  } catch (error) {
+    return { error: controller.signal.aborted ? 'Download cancelled' : describeNetworkError(error) }
+  } finally {
+    installAbort = null
+  }
+}
+
 // ─────────────────────── IPC handlers ────────────────────────────────────────
 
 function setupIPC() {
@@ -113,6 +195,14 @@ function setupIPC() {
   handle('get-sidecar-connection', () => ({ port: sidecarPort, token: sidecarToken }))
 
   handle('get-app-version', () => app.getVersion())
+
+  handle('open-repo', () => shell.openExternal(REPO_URL))
+  handle('updates-get-settings', () => settingsStore.get())
+  handle('updates-set-settings', (_, patch) => settingsStore.update(patch))
+  handle('updates-check', (_, options) => runUpdateCheck(options))
+  handle('updates-open-release', () => lastUpdate ? shell.openExternal(lastUpdate.url) : undefined)
+  handle('updates-install', () => installUpdate())
+  handle('updates-cancel', () => { installAbort?.abort() })
 
   handle('open-folder-dialog', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
@@ -183,6 +273,9 @@ function buildMenu() {
     {
       label: 'Help',
       submenu: [
+        { label: 'Check for Updates…',
+          click: () => mainWindow.webContents.send('menu-check-updates') },
+        { type: 'separator' },
         { label: 'About MetaLens',
           click: () => mainWindow.webContents.send('menu-about') },
       ],
@@ -234,6 +327,8 @@ if (!squirrelEvent) app.whenReady().then(async () => {
     app.quit()
     return
   }
+  settingsStore = createSettingsStore(path.join(app.getPath('userData'), 'settings.json'))
+  cleanupStaleDownloads().catch(() => {})
   setupIPC()
   buildMenu()
   await createWindow()

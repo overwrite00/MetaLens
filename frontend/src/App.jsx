@@ -5,8 +5,9 @@ import { DetailPanel } from './components/DetailPanel'
 import { AboutDialog } from './components/AboutDialog'
 import { Button } from './components/ui/Button'
 import { useUndoStack } from './hooks/useUndoStack'
+import { useUpdates } from './hooks/useUpdates'
 import { metalens } from './api/client'
-import { FolderOpen, RotateCcw, GitCompare, Layers } from 'lucide-react'
+import { FolderOpen, RotateCcw, GitCompare, Layers, CircleArrowUp } from 'lucide-react'
 import './styles/globals.css'
 
 export default function App() {
@@ -16,6 +17,8 @@ export default function App() {
   const [showAbout, setShowAbout]       = useState(false)
   const [undoMsg, setUndoMsg]           = useState(null)
   const { push: undoPush, undo, canUndo, runExclusive, busy } = useUndoStack()
+  const updates = useUpdates()
+  const { check: checkUpdates } = updates
   const [reloadKey, setReloadKey] = useState(0)
   const [filesReloadKey, setFilesReloadKey] = useState(0)
 
@@ -26,19 +29,28 @@ export default function App() {
 
   // ── Menu events from Electron ─────────────────────────────────────────────
   useEffect(() => {
-    if (!window.electronAPI) return
+    const api = window.electronAPI
+    if (!api) return
     const openFolder = () => openFolderDialog()
     const undo       = () => handleUndo()
     const about      = () => setShowAbout(true)
-    window.electronAPI.onMenuOpenFolder(openFolder)
-    window.electronAPI.onMenuUndo(undo)
-    window.electronAPI.onMenuAbout(about)
+    api.onMenuOpenFolder(openFolder)
+    api.onMenuUndo(undo)
+    api.onMenuAbout(about)
     return () => {
-      window.electronAPI.removeAllListeners('menu-open-folder')
-      window.electronAPI.removeAllListeners('menu-undo')
-      window.electronAPI.removeAllListeners('menu-about')
+      api.removeAllListeners('menu-open-folder')
+      api.removeAllListeners('menu-undo')
+      api.removeAllListeners('menu-about')
     }
   }, [selectedFile, undo, canUndo])
+
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.onMenuCheckUpdates?.(() => {
+      setShowAbout(true)
+      checkUpdates()
+    })
+    return () => { if (typeof unsubscribe === 'function') unsubscribe() }
+  }, [checkUpdates])
 
   async function openFolderDialog() {
     if (!window.electronAPI) return
@@ -124,7 +136,13 @@ export default function App() {
           <span className="ml-3 text-[10px] font-mono text-cyber-warning">{undoMsg}</span>
         )}
 
-        <div className="ml-auto" style={{ WebkitAppRegion: 'no-drag' }}>
+        <div className="ml-auto flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' }}>
+          {updates.notice && (
+            <Button variant="primary" size="xs" onClick={() => setShowAbout(true)}
+              title="A new version is available">
+              <CircleArrowUp size={12} /> Update v{updates.update.version}
+            </Button>
+          )}
           <Button variant="ghost" size="xs" onClick={() => setShowAbout(true)}>About</Button>
         </div>
       </div>
@@ -167,7 +185,7 @@ export default function App() {
       </div>
 
       {/* About dialog */}
-      {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
+      {showAbout && <AboutDialog updates={updates} onClose={() => setShowAbout(false)} />}
     </div>
   )
 }

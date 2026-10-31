@@ -13,7 +13,32 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - [ ] **Batch Edit** — Apply a field change to multiple selected files at once
 - [ ] **Search/Filter Bar** — Filter the file list by name or extension
 
+### Added
+- **Update check.** *Help → Check for Updates…* and *About → Check for updates* look up the latest
+  release on GitHub. A stable build is only offered newer stable releases; a beta build is also
+  offered newer betas and the stable release of its version, and the dialog says which kind it is.
+  The release notes are shown, with **Release page**, **Ignore this version** / **Stop ignoring**
+  and, on Windows installed builds, **Download & install**: the installer is downloaded to a
+  temporary folder, verified against the size and SHA-256 digest published by GitHub (a mismatch
+  discards it), then started while MetaLens closes. The download can be cancelled. On Linux only
+  the release page is offered.
+- The check never runs on its own by default: a **Check for updates automatically at startup**
+  option (off by default) is stored in `settings.json` in the app data folder. When on, a new
+  version shows an **Update vX.Y.Z** button in the toolbar; a failed startup check stays silent.
+  All requests are made by the Electron main process, which only talks to the
+  `overwrite00/MetaLens` releases and never accepts URLs from the renderer.
+- The About dialog links to the project repository on GitHub, and can be closed with Esc.
+
+### Changed
+- Version bumped to 0.4.0 (new feature). The fixes below, previously tracked as 0.3.6 betas, ship
+  in 0.4.0; there is no 0.3.6 stable release.
+- Privacy statements (README, SECURITY, requirements) now say "offline by default" instead of
+  "no network calls": the update check is the only network access and is user-initiated or opt-in.
+
 ### Fixed
+- Closing the app no longer throws in the menu-listener cleanup if `window.electronAPI` is gone.
+- Documentation said the About dialog reads the version from the sidecar's `/health`; it shows the
+  packaged app version (`app.getVersion()`, including the beta suffix). Corrected in the guides.
 - The folder panel **Refresh** button no longer collapses the tree and drops the current
   folder. It now re-reads the drive list and every expanded folder (keeping expansion and
   selection), and reloads the file list of the selected folder, keeping the still-existing file
@@ -34,6 +59,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
   `MetaLens-<version>-linux-x64.tar.gz`.
 
 ### Documentation
+- New *Updates* section in the usage guide; privacy and security pages describe the update check.
 - Installation and requirements guides describe the Linux packages, the glibc 2.34 baseline and
   the glibc troubleshooting case; `CONTRIBUTING.md` documents how the Linux jobs are split.
 

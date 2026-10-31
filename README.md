@@ -9,10 +9,10 @@
   <img src="docs/cover.png" alt="MetaLens — Universal File Metadata Manager" width="860" />
 </p>
 
-**Universal File Metadata Manager** — read, edit, delete and compare metadata across all major file formats, entirely offline.
+**Universal File Metadata Manager** — read, edit, delete and compare metadata across all major file formats, offline by default.
 
 > [!TIP]
-> 💡 **No account, no cloud, no setup.** Download a binary, double-click, and start browsing — MetaLens never touches the network.
+> 💡 **No account, no cloud, no setup.** Download a binary, double-click, and start browsing. MetaLens never touches the network unless you ask it to check for a new version (see [Privacy & Security](#-privacy--security)).
 
 ---
 
@@ -74,7 +74,8 @@ File (image / audio / video / document / anything)
 - 🔑 **File integrity hashes** — on-demand MD5 / SHA-1 / SHA-256 / SHA-512 / BLAKE2b with one-click copy
 - 🎨 **Cyber dark theme** — professional dark UI with cyan/blue accents
 - 📦 **Compiled binaries** — no Python or Node.js required to run
-- 💾 **Offline-first** — zero network calls, zero telemetry
+- 💾 **Offline-first** — zero telemetry; the only network call is the optional update check
+- 🔔 **Update check** — manual from *About* / *Help*, or opt-in at startup; downloads are SHA-256 verified
 - 🆓 **Free & open-source** — MIT license
 
 ---
@@ -195,7 +196,7 @@ cd ../frontend && npm test
 - 🔒 **No telemetry** — zero data collection
 - 📁 **Localhost-only sidecar** — the Python API never binds beyond `127.0.0.1`
 - 🔓 **Open source** — fully auditable code
-- ⚡ **Fully offline** — no internet connection required, ever
+- ⚡ **Offline by default** — no internet connection required. The only network access is the update check against the public GitHub Releases API, started by you (**About → Check for updates** or **Help → Check for Updates…**) or, if you enable it, once at startup. It sends no file data, paths or identifiers (only a `User-Agent: MetaLens/<version>` header). Settings are stored locally in `settings.json` in the app data folder
 
 📖 See [SECURITY.md](./SECURITY.md) for the full security model.
 
@@ -240,5 +241,5 @@ Distributed with MIT License · [View License](LICENSE)
 
 ---
 
-*Last updated: 2026-10-29*
+*Last updated: 2026-10-31*
 *← [Requirements](docs/REQUIREMENTS.md) | [Docs →](docs/)*

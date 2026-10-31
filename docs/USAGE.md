@@ -97,9 +97,25 @@ MetaLens keeps an in-memory undo stack of your last **50** write/delete operatio
 
 ## ℹ️ Checking Your Version
 
-Open **Help → About** to see the running app version, read live from the Python sidecar's `/health` endpoint — useful when reporting a bug.
+Open **Help → About** to see the running app version (the packaged Electron app version, including any `-beta.N` suffix) — useful when reporting a bug. The dialog also links to the project repository on GitHub.
 
 ---
 
-*Last updated: 2026-07-14*
+## 🔔 Updates
+
+MetaLens never checks for updates on its own unless you enable it.
+
+- **Check now** — **Help → Check for Updates…**, or **About → Check for updates**. This contacts the public GitHub Releases API (`api.github.com`) and compares the result with your version.
+- **Check at startup** — tick **Check for updates automatically at startup** in the About dialog (off by default). A failed startup check is silent; if a new version is found, an **Update vX.Y.Z** button appears in the toolbar.
+- **Which releases count** — a stable build is only offered newer **stable** releases. A beta build (`X.Y.Z-beta.N`) is offered newer betas as well as the stable release of its version or later, and the dialog says whether the new version is a beta or a stable.
+- **What you see** — the release notes (as plain text) and, depending on the platform, buttons:
+  - **Windows (installed build)** — **Download & install** downloads the installer to a temporary folder, verifies its SHA-256 checksum against the one published by GitHub, then starts it and closes MetaLens. A download that does not match is discarded. Use **Cancel** to stop a download.
+  - **Linux** — only **Release page** is offered; download the package for your distribution from there (see the [Installation Guide](./INSTALLATION.md)).
+- **Ignore this version** — hides the toolbar notice for that version only (a manual check still shows it, marked *ignored*, with **Stop ignoring**). A newer version is announced again.
+
+The preferences (auto-check on/off, ignored version) are stored in `settings.json` inside the app's user-data folder.
+
+---
+
+*Last updated: 2026-10-31*
 *← [Installation](./INSTALLATION.md) | [API Reference →](./API.md)*

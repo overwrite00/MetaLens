@@ -48,3 +48,28 @@ test('frontend fails closed without Electron and sends session token in header o
   const authenticated = await import(`${url}?authenticated`)
   assert.deepEqual(await authenticated.metalens.health(), { status: 'ok' })
 })
+
+test('preload exposes the update API over fixed channels only', async () => {
+  let api
+  const calls = []
+  const ipcRenderer = {
+    invoke: async (...args) => { calls.push(args) },
+    on() {}, removeListener() {}, removeAllListeners() {},
+  }
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'preload.js'), 'utf8'), {
+    require: () => ({ contextBridge: { exposeInMainWorld: (_name, surface) => { api = surface } }, ipcRenderer }),
+  })
+  await api.openRepo()
+  await api.getUpdateSettings()
+  await api.setUpdateSettings({ autoCheckUpdates: true })
+  await api.checkForUpdates({ auto: true })
+  await api.openReleasePage()
+  await api.installUpdate()
+  await api.cancelUpdate()
+  assert.deepEqual(calls, [
+    ['open-repo'], ['updates-get-settings'], ['updates-set-settings', { autoCheckUpdates: true }],
+    ['updates-check', { auto: true }], ['updates-open-release'], ['updates-install'], ['updates-cancel'],
+  ])
+  assert.equal(typeof api.onUpdateProgress(() => {}), 'function')
+  assert.equal(typeof api.onMenuCheckUpdates(() => {}), 'function')
+})
