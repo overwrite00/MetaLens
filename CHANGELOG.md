@@ -22,6 +22,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
   signed Office packages.
 
 ### Added
+- **Folder tree navigation.** The Home bookmark now expands the tree along the whole path (drive → … → Home),
+  selects the folder and scrolls it into view. Right-clicking a folder opens a menu: *Expand* / *Collapse*
+  (that folder only), *Expand all* (every folder of the tree; folders not yet loaded are read down to 3
+  levels from the drive root) and *Collapse all*.
 - **Update check.** *Help → Check for Updates…* and *About → Check for updates* look up the latest
   release on GitHub. A stable build is only offered newer stable releases; a beta build is also
   offered newer betas and the stable release of its version, and the dialog says which kind it is.
