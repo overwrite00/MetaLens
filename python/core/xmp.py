@@ -60,9 +60,6 @@ NEW_PACKET = (
     '<?xpacket end="w"?>'
 ).encode("utf-8")
 
-_XML_CHAR = re.compile("[^\t\n\r\x20-\ud7ff\ue000-\ufffd\U00010000-\U0010ffff]")
-
-
 _SUFFIX = re.compile(rb"([ \t\r\n]*)(.*)\Z", re.S)     # padding run, then <?xpacket end ...?> etc.
 _PADDING = re.compile(rb"[ \t\r\n]+")
 
@@ -72,8 +69,13 @@ class XmpFormatError(ValueError):
 
 
 def invalid_xml_char(text: str) -> str | None:
-    m = _XML_CHAR.search(text)
-    return None if m is None else m.group(0)
+    """First character outside the XML 1.0 Char production, or None."""
+    for ch in text:
+        code = ord(ch)
+        if not (code in (0x9, 0xA, 0xD) or 0x20 <= code <= 0xD7FF
+                or 0xE000 <= code <= 0xFFFD or 0x10000 <= code <= 0x10FFFF):
+            return ch
+    return None
 
 
 # ──────────────────────── node tree ──────────────────────────────────────────

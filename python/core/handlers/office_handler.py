@@ -27,6 +27,7 @@ from core import values
 from core.base_handler import ABSENT, BaseMetadataHandler, Snapshot
 from core.errors import ErrorCode, MetadataValueError, MetadataValueErrors
 from core.models import MetadataField, MetadataRecord
+from core.xmp import invalid_xml_char
 
 _NS = {
     "cp": "http://schemas.openxmlformats.org/package/2006/metadata/core-properties",
@@ -73,8 +74,6 @@ _VT_FLOAT = frozenset({"r4", "r8", "decimal"})
 _VT_DATE = frozenset({"filetime", "date"})
 
 SIGNED_REASON = "Digitally signed Office package: editing would invalidate the signature"
-# XML 1.0 Char production.
-_XML_INVALID = re.compile("[^\t\n\r\x20-\ud7ff\ue000-\ufffd\U00010000-\U0010ffff]")
 
 
 def _qname(name: str) -> str:
@@ -312,7 +311,7 @@ class OfficeHandler(BaseMetadataHandler):
         result = super().canonical(field, value)
         if field.field_type == "int" and field.key == "office:revision" and result < 1:
             raise MetadataValueError(field.key, ErrorCode.OUT_OF_RANGE, f"{field.key}: must be >= 1")
-        if isinstance(result, str) and field.field_type in ("str", "text") and _XML_INVALID.search(result):
+        if isinstance(result, str) and field.field_type in ("str", "text") and invalid_xml_char(result) is not None:
             raise MetadataValueError(field.key, ErrorCode.INVALID_VALUE,
                                      f"{field.key}: contains characters not allowed in XML")
         return result

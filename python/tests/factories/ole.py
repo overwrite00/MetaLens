@@ -75,6 +75,7 @@ def typed(vt: int, value) -> bytes:
     """
     head = struct.pack("<HH", vt, 0)
     if vt & VT_VECTOR:
+        assert isinstance(value, (list, tuple)), "a vector value must be a list"
         base = vt & ~VT_VECTOR
         body = struct.pack("<I", len(value))
         for item in value:
