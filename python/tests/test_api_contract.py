@@ -235,14 +235,15 @@ async def test_hash_without_algorithms_is_400(client, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_auth_errors_use_uniform_body(monkeypatch):
-    monkeypatch.setattr(app.state, "sidecar_token", "secret")
+async def test_auth_errors_use_uniform_body():
+    # assegnazione diretta: la fixture autouse di conftest ripristina il token
+    app.state.sidecar_token = "secret"
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         assert_error(await c.get("/health"), 401, "unauthorized", key=None)
         assert_error(await c.get("/health", headers={"Origin": "https://evil.example",
                                                      "Authorization": "Bearer secret"}),
                      403, "origin_not_allowed", key=None)
-    monkeypatch.setattr(app.state, "sidecar_token", None)
+    app.state.sidecar_token = None
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         assert_error(await c.get("/health"), 503, "auth_not_configured", key=None)
 
