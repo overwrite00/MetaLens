@@ -32,7 +32,7 @@ const openAbout = () => fireEvent.click(screen.getByRole('button', { name: 'Abou
 test('About links to the repository through the main process', async () => {
   render(<App />)
   openAbout()
-  const link = await screen.findByRole('link', { name: /github\.com\/overwrite00\/MetaLens/ })
+  const link = await screen.findByRole('link', { name: /^github\.com\/overwrite00\/MetaLens\s*$/ })
   expect(link.getAttribute('href')).toBe('https://github.com/overwrite00/MetaLens')
   fireEvent.click(link)
   expect(api.openRepo).toHaveBeenCalledOnce()
@@ -159,5 +159,5 @@ test('without Electron the update section is hidden and nothing throws', async (
   openAbout()
   await screen.findByText('v?')
   expect(screen.queryByText('Updates')).toBeNull()
-  expect(screen.getByRole('link', { name: /github\.com/ })).toBeTruthy()
+  expect(screen.getByRole('link', { name: /^github\.com\// })).toBeTruthy()
 })

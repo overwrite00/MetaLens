@@ -188,7 +188,7 @@ def parse_rational(value: Any, *, signed: bool = False) -> tuple[int, int]:
         raise _fail(ErrorCode.INVALID_VALUE, f"negative denominator: {value!r}")
     if den == 0 and num != 0:
         raise _fail(ErrorCode.INVALID_VALUE, f"zero denominator: {value!r}")
-    if not (low <= num <= high) or not (0 <= den <= high):
+    if not (low <= num <= high) or den > high:
         raise _fail(ErrorCode.OUT_OF_RANGE, f"rational {num}/{den} outside the format range")
     return num, den
 

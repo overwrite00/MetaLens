@@ -60,7 +60,7 @@ NEW_PACKET = (
     '<?xpacket end="w"?>'
 ).encode("utf-8")
 
-_XML_CHAR = re.compile("[^\t\n\r -퟿-�\U00010000-\U0010ffff]")
+_XML_CHAR = re.compile("[^\t\n\r\x20-\ud7ff\ue000-\ufffd\U00010000-\U0010ffff]")
 
 
 _SUFFIX = re.compile(rb"([ \t\r\n]*)(.*)\Z", re.S)     # padding run, then <?xpacket end ...?> etc.

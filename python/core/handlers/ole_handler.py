@@ -17,6 +17,7 @@ OLE property sets is not supported (use docx/xlsx/pptx).
 from __future__ import annotations
 
 import codecs
+import math
 import struct
 import uuid
 from dataclasses import dataclass, field as dc_field
@@ -356,7 +357,7 @@ def _scalar(value: Any) -> tuple[str, Any] | None:
     if isinstance(value, int):
         return "int", value
     if isinstance(value, float):
-        return ("float", value) if value == value and abs(value) != float("inf") else ("str", str(value))
+        return ("float", value) if math.isfinite(value) else ("str", str(value))
     if isinstance(value, FileTime):
         iso = _filetime_iso(value)
         return None if iso is None else ("datetime", iso)

@@ -24,6 +24,7 @@ tag found elsewhere, ``gps:<Name>`` (``GPS`` prefix removed) for the GPS IFD.
 """
 from __future__ import annotations
 
+import math
 import re
 import struct
 from dataclasses import dataclass, field
@@ -550,7 +551,7 @@ def decode(ifd: str, tag: int, entry: Entry, bo: str) -> Decoded:
     # FLOAT / DOUBLE: shown, never editable (float32 cannot keep arbitrary input).
     fmt = "f" if t == 11 else "d"
     items = [float(x) for x in struct.unpack(bo + fmt * n, entry.data)]
-    if not all(x == x and abs(x) != float("inf") for x in items):
+    if not all(math.isfinite(x) for x in items):
         return binary
     dec = _scalar_or_list(items, "float", None, False, "float")
     return dec

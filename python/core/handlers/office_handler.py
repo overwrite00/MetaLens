@@ -74,7 +74,7 @@ _VT_DATE = frozenset({"filetime", "date"})
 
 SIGNED_REASON = "Digitally signed Office package: editing would invalidate the signature"
 # XML 1.0 Char production.
-_XML_INVALID = re.compile("[^\t\n\r -퟿-�\U00010000-\U0010ffff]")
+_XML_INVALID = re.compile("[^\t\n\r\x20-\ud7ff\ue000-\ufffd\U00010000-\U0010ffff]")
 
 
 def _qname(name: str) -> str:
