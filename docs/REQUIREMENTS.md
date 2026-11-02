@@ -32,6 +32,7 @@ Requirements for running the pre-built MetaLens application and, separately, for
 
 ### 🍎 macOS
 - **Status:** ❌ Not currently packaged — no macOS build is produced by CI. Building from source with `npm run make` is possible but unverified.
+- **Extended attributes (xattr):** read-only on macOS. Writing them needs a macOS machine to be verified (the CI has no macOS runner and no Mac build is published), and an unverified write could corrupt user data, so it is not offered. Linux `user.` attributes are writable and covered by the CI.
 
 ---
 
