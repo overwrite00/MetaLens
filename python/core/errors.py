@@ -13,8 +13,11 @@ one entry of the uniform error body ``{"ok": false, "errors": [...], "detail": s
 """
 from __future__ import annotations
 
+import os
+
 __all__ = [
     "PathSecurityError",
+    "describe_error",
     "ErrorCode",
     "MetadataValueError",
     "MetadataValueErrors",
@@ -27,6 +30,24 @@ __all__ = [
 
 class PathSecurityError(Exception):
     """Raised when path validation or a safe write fails (base of the transaction errors)."""
+
+
+def describe_error(exc: BaseException) -> str:
+    """Short, fixed-vocabulary description of ``exc`` that is safe to put in an API response.
+
+    Built only from structured data (``errno`` through ``os.strerror``, or the kind of
+    exception): never from ``str(exc)``, which may carry paths or library internals. The
+    full exception belongs in the local log (``logger.warning(..., exc_info=True)``).
+    """
+    if isinstance(exc, OSError):
+        if isinstance(exc.errno, int) and exc.errno > 0:
+            return os.strerror(exc.errno).lower()
+        return "input/output error"
+    if isinstance(exc, MemoryError):
+        return "not enough memory"
+    if isinstance(exc, (ValueError, TypeError, KeyError, IndexError)):
+        return "unexpected value in the file"
+    return "unexpected error"
 
 
 class ErrorCode:

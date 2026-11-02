@@ -18,6 +18,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 ## [0.4.0] — 2026-11-02
 
 ### Security
+- API responses no longer contain the raw text of an exception (which could carry paths or library
+  internals): warnings and Undo notices use a short fixed description (`describe_error`, e.g. "permission
+  denied"); the full detail goes to the local log only.
 - Deleting GPS (or any EXIF field) from a JPEG that contained a second, duplicated APP1 Exif segment
   left the old copy, GPS coordinates included, in the file. EXIF is now rewritten in place in the first
   Exif segment and duplicates are removed (with a warning), so no byte of the deleted data remains.

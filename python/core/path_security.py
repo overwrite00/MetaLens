@@ -27,7 +27,8 @@ from threading import Lock, RLock
 from typing import Any, Callable
 from pathlib import Path
 
-from core.errors import ConcurrentModificationError, PathSecurityError, TargetNotWritableError
+from core.errors import (ConcurrentModificationError, PathSecurityError, TargetNotWritableError,
+                         describe_error)
 
 # Metadata mutations are infrequent. One reentrant lock also permits nested
 # transactions without acquiring path locks in inconsistent orders.
@@ -418,7 +419,7 @@ def secure_atomic_write(
                 except Exception as exc:   # never turn a committed save into an error
                     logger.exception("Restoring the Windows metadata of %s failed", target)
                     warnings.append("The file was saved, but its attributes and permissions could not be "
-                                    f"checked ({type(exc).__name__}: {exc})")
+                                    f"checked ({describe_error(exc)})")
         except _RecoveryError:
             cleanup = False
             raise
@@ -707,7 +708,8 @@ def _read_windows_security(target: Path, notes: list[str]) -> _Security | None:
         # needs that access too): refuse before touching anything.
         raise TargetNotWritableError(f"Cannot read the permissions of: {target} ({exc})") from exc
     except OSError as exc:
-        notes.append(f"The permissions of the file could not be read ({exc}); "
+        logger.warning("The permissions of %s could not be read", target, exc_info=True)
+        notes.append(f"The permissions of the file could not be read ({describe_error(exc)}); "
                      "check them, the save may have changed them")
         return None
 
@@ -718,15 +720,17 @@ def _restore_windows_security(target: Path, security: _Security) -> list[str]:
     try:
         _post_commit_retry(lambda: _ensure_dacl(target, security))
     except OSError as exc:
+        logger.warning("The ACL of %s could not be restored", target, exc_info=True)
         warnings.append("The file was saved, but its permissions (access control list) could not be "
-                        f"restored: {exc}. Check the file's security settings.")
+                        f"restored: {describe_error(exc)}. Check the file's security settings.")
     try:
         current = _sddl(_get_file_security(target, _OWNER_SECURITY_INFORMATION), _OWNER_SECURITY_INFORMATION)
         if current != security.owner_sddl:
             _post_commit_retry(lambda: _set_file_security(target, _OWNER_SECURITY_INFORMATION, security.owner))
     except OSError as exc:
+        logger.warning("The owner of %s could not be restored", target, exc_info=True)
         warnings.append(f"The file was saved, but its owner could not be restored ({security.owner_sddl}; "
-                        f"restoring another user's ownership needs additional privileges): {exc}")
+                        f"restoring another user's ownership needs additional privileges): {describe_error(exc)}")
     return warnings
 
 
@@ -764,8 +768,9 @@ def _restore_windows_metadata(target: Path, original_attrs: int | None,
         try:
             _post_commit_retry(lambda: _ensure_windows_attributes(target, wanted))
         except OSError as exc:
+            logger.warning("The Windows attributes of %s could not be restored", target, exc_info=True)
             warnings.append(f"The file was saved, but its Windows attributes ({_attribute_names(wanted)}) "
-                            f"could not be restored: {exc}")
+                            f"could not be restored: {describe_error(exc)}")
     if security is not None:
         warnings += _restore_windows_security(target, security)
     return warnings
@@ -781,7 +786,8 @@ def _cleanup_directory(directory: Path) -> str | None:
             return None
         except OSError as exc:
             if attempt == 3:
-                return (f"The temporary folder {directory} could not be removed ({exc}); "
+                logger.warning("The temporary folder %s could not be removed", directory, exc_info=True)
+                return (f"The temporary folder {directory} could not be removed ({describe_error(exc)}); "
                         "it can be deleted safely")
             time.sleep(0.05 * (attempt + 1))
     return None

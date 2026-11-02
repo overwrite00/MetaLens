@@ -86,7 +86,7 @@ from api.undo_journal import UndoJournal, UndoTooLargeError
 from core.base_handler import ABSENT, BaseMetadataHandler
 from core.diff import compute_diff
 from core.errors import (ConcurrentModificationError, ErrorCode, MetadataValueError,
-                         MetadataValueErrors, TargetNotWritableError, error_entry)
+                         MetadataValueErrors, TargetNotWritableError, describe_error, error_entry)
 from core.handlers.filesystem_handler import MTIME_KEY, FilesystemHandler, write_block_reason
 from core.models import MetadataField, MetadataRecord
 from core import path_security
@@ -586,7 +586,8 @@ def _addable(handler, path: Path, record: MetadataRecord, warnings: list[str]) -
     try:
         return list(handler.writable_fields(path, record))
     except Exception as exc:  # the schema is optional: never fail the read for it
-        warnings.append(f"Addable fields unavailable: {type(exc).__name__}: {exc}")
+        logger.warning("Addable fields of %s unavailable", path, exc_info=True)
+        warnings.append(f"Addable fields unavailable: {describe_error(exc)}")
         return []
 
 
@@ -829,7 +830,7 @@ def _add_linked_changes(ctx: _Context, plan: _Plan) -> None:
         try:
             canonical = _validate_value(handler, field, value)
         except MetadataValueError as exc:
-            plan.notes.append(f"{key} was not updated to match: {exc}")
+            plan.notes.append(f"{key} was not updated to match: {exc.code.replace('_', ' ')}")
             continue
         plan.writes[FORMAT].append(replace(field, value=canonical))
         plan.expected[key] = canonical
@@ -1007,7 +1008,7 @@ def _mutate_once(ctx: _Context, plan: _Plan) -> _Outcome:
         except Exception as exc:
             logger.error("Undo pre-image of %s %s failed", ctx.path, plan.keys(FORMAT) + plan.keys(FS),
                          exc_info=(type(exc), exc, exc.__traceback__))
-            outcome.pre, outcome.snapshot_error = None, f"{type(exc).__name__}: {exc}"
+            outcome.pre, outcome.snapshot_error = None, describe_error(exc)
         # Format layer first: its rewrite changes the mtime written by the fs layer.
         for lay in (FORMAT, FS):
             handler = ctx.handler_of(lay)
@@ -1077,7 +1078,7 @@ def _record_undo(ctx: _Context, outcome: _Outcome, identity: tuple) -> tuple[str
             return None, None
         return None, _unavailable(UndoCode.SNAPSHOT_FAILED,
                                   "This change was saved but cannot be undone: the saved values could "
-                                  f"not be captured ({type(exc).__name__}: {exc})")
+                                  f"not be captured ({describe_error(exc)})")
     changed_pre: dict[str, dict[str, Any]] = {}
     changed_post: dict[str, dict[str, Any]] = {}
     for lay, snap in outcome.pre.items():
@@ -1121,9 +1122,10 @@ def _save(path_str: str, writes: list[WriteField], deletes: list[str]) -> dict:
         try:
             after = _identity(ctx.path)
         except OSError as exc:
+            logger.warning("%s could not be found again after the save", ctx.path, exc_info=True)
             unavailable = None if not outcome.changed else _unavailable(
                 UndoCode.SNAPSHOT_FAILED, f"This change was saved but cannot be undone: the file could not be "
-                f"found again after the save ({exc})")
+                f"found again after the save ({describe_error(exc)})")
             return _saved(None, unavailable, outcome.warnings)
         UNDO_JOURNAL.update_identity(ctx.path, before, after)
         token, unavailable = _record_undo(ctx, outcome, after)

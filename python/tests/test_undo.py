@@ -731,7 +731,9 @@ async def test_snapshot_failure_is_logged_and_reported(client, tmp_path, jsonfak
         body = _ok(await _write(client, path, {"j:a": "changed"}))
     assert body["undo_token"] is None
     assert body["undo_unavailable"]["code"] == "undo_snapshot_failed"
-    assert "KeyError" in body["undo_unavailable"]["message"]
+    # fixed description in the response; the exception itself is in the log (below)
+    assert "unexpected value in the file" in body["undo_unavailable"]["message"]
+    assert "bug in snapshot" not in body["undo_unavailable"]["message"]
     assert _JsonHandler.load(path) == {"j:a": "changed", "j:b": "2"}
     assert any(r.exc_info and r.exc_info[0] is KeyError for r in caplog.records), caplog.records
     # A real no-op stays a no-op even when the snapshot is broken.
