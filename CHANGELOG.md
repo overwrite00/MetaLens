@@ -13,6 +13,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - [ ] **Batch Edit** — Apply a field change to multiple selected files at once
 - [ ] **Search/Filter Bar** — Filter the file list by name or extension
 
+---
+
+## [0.4.0] — 2026-11-02
+
 ### Security
 - Deleting GPS (or any EXIF field) from a JPEG that contained a second, duplicated APP1 Exif segment
   left the old copy, GPS coordinates included, in the file. EXIF is now rewritten in place in the first
