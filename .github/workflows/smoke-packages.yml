@@ -67,11 +67,21 @@ jobs:
           TAG=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --json tagName --jq '.[0].tagName')
           echo "Testing the packages of $TAG"
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir pkgs --pattern '*.deb' --pattern '*.rpm' --pattern '*.tar.gz'
-      - run: find pkgs -type f | sort
+      - name: Put the packages in one flat folder
+        run: |
+          # Artifacts keep their sub-folders (pkgs/deb/..., pkgs/rpm/...); a release download does not.
+          mkdir flat
+          for pat in '*.deb' '*.rpm' '*.tar.gz'; do
+            find pkgs -type f -name "$pat" -exec cp -t flat {} +
+          done
+          ls -l flat
+          for ext in deb rpm tar.gz; do
+            ls flat/*.$ext >/dev/null 2>&1 || { echo "::error::no .$ext package found"; exit 1; }
+          done
       - uses: actions/upload-artifact@v7
         with:
           name: smoke-packages
-          path: pkgs
+          path: flat
           if-no-files-found: error
 
   version:
