@@ -222,6 +222,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - Python suite: 1364 passed, 14 skipped on Windows (platform-specific tests are skipped on the
   other platforms).
 
+### Dependencies
+- Python: fastapi 0.141.1 → 0.162.0, pypdf 6.21.2 → 6.21.4, pytest 9.1.1 → 9.2.0,
+  pytest-asyncio 1.4.0 → 1.4.1.
+- Frontend: react and react-dom 19.3.0 → 19.3.1, lucide-react → 1.65.0, @vitejs/plugin-react
+  6.1.1 → 6.1.2. Electron: 44.9.3 → 45.1.0.
+- GitHub Actions: github/codeql-action 4.38.2 → 4.39.1.
+- Tests: with pytest 9.2 `monkeypatch.setattr` on Starlette's `app.state` removes the attribute at
+  teardown; `python/tests/conftest.py` now restores the sidecar token with an autouse fixture.
+
 ### CI/CD
 - Test jobs install `python/requirements-dev.txt`; the PyInstaller build jobs install only the runtime
   `python/requirements.txt` and no longer pass `--hidden-import` for python-docx, openpyxl and python-pptx.
