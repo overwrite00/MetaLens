@@ -199,6 +199,15 @@ jobs:
             --hidden-import hachoir `
             --hidden-import olefile `
             --hidden-import pypdf
+      - name: Smoke test the packaged sidecar
+        shell: bash
+        run: |
+          # Starts the PyInstaller exe that will be shipped and exercises it (scripts/smoke_sidecar.sh).
+          cd python
+          pip install -r requirements-dev.txt -q
+          python -m tests.factories --out ../smoke-samples $(cat ../scripts/smoke_samples.txt)
+          cd ..
+          bash scripts/smoke_sidecar.sh "${{ needs.get-version-beta.outputs.base_version }}" "$PWD/smoke-samples" "$PWD/python/dist/metalens-sidecar.exe"
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
@@ -405,9 +414,19 @@ jobs:
           path: electron/out/make/**/*.rpm
           if-no-files-found: error
 
+  # Installs the .deb/.rpm/.tar.gz on the supported distributions and exercises the installed
+  # sidecar (see smoke-packages.yml). Gates the beta: nothing is published if a package is broken.
+  smoke-linux-beta:
+    if: github.ref == 'refs/heads/develop'
+    needs: [get-version-beta, build-linux-beta, build-rpm-beta]
+    uses: ./.github/workflows/smoke-packages.yml
+    with:
+      expected_version: ${{ needs.get-version-beta.outputs.base_version }}
+      channel: beta
+
   release-beta:
     if: github.ref == 'refs/heads/develop'
-    needs: [get-version-beta, build-windows-beta, build-linux-beta, build-rpm-beta]
+    needs: [get-version-beta, build-windows-beta, build-linux-beta, build-rpm-beta, smoke-linux-beta]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -555,6 +574,15 @@ jobs:
             --hidden-import hachoir `
             --hidden-import olefile `
             --hidden-import pypdf
+      - name: Smoke test the packaged sidecar
+        shell: bash
+        run: |
+          # Starts the PyInstaller exe that will be shipped and exercises it (scripts/smoke_sidecar.sh).
+          cd python
+          pip install -r requirements-dev.txt -q
+          python -m tests.factories --out ../smoke-samples $(cat ../scripts/smoke_samples.txt)
+          cd ..
+          bash scripts/smoke_sidecar.sh "${{ needs.get-version.outputs.version }}" "$PWD/smoke-samples" "$PWD/python/dist/metalens-sidecar.exe"
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
@@ -777,9 +805,19 @@ jobs:
           path: electron/out/make/**/*.rpm
           if-no-files-found: error
 
+  # Same smoke test on the packages the stable release will ship (they are rebuilt, not reused
+  # from the beta): nothing is published if one of them does not install or start.
+  smoke-linux-stable:
+    if: github.ref == 'refs/heads/main'
+    needs: [get-version, build-linux-stable, build-rpm-stable]
+    uses: ./.github/workflows/smoke-packages.yml
+    with:
+      expected_version: ${{ needs.get-version.outputs.version }}
+      channel: stable
+
   release-stable:
     if: github.ref == 'refs/heads/main'
-    needs: [get-version, find-latest-beta, build-windows-stable, build-linux-stable, build-rpm-stable]
+    needs: [get-version, find-latest-beta, build-windows-stable, build-linux-stable, build-rpm-stable, smoke-linux-stable]
     runs-on: ubuntu-latest
     permissions:
       contents: write

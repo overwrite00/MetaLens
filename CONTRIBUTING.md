@@ -194,6 +194,8 @@ Preview what a release will say with `python scripts/changelog_notes.py X.Y.Z`.
 
 The PyInstaller sidecar embeds the glibc of the machine that builds it, so the Linux jobs in `.github/workflows/build.yml` never use `ubuntu-latest` for it. `build-sidecar-linux-*` builds the sidecar once in a `rockylinux:9` container (glibc 2.34, Python 3.13 from `uv`); `build-linux-*` (`.deb` and `.tar.gz`, on `ubuntu-24.04`) and `build-rpm-*` (`.rpm`, in the same container) reuse it. Do not build the `.rpm` on `ubuntu-26.04`: RPM 6 breaks `electron-installer-redhat` 4.0.0. A workflow change can be tried without publishing a release by dispatching `build.yml` from a temporary branch whose job conditions are relaxed.
 
+**Package smoke test.** `.github/workflows/smoke-packages.yml` (called by `smoke-linux-beta` / `smoke-linux-stable` in `build.yml`, which gate `release-beta` / `release-stable`) installs the `.deb`, `.rpm` and `.tar.gz` in containers of the supported distributions and runs `scripts/smoke_sidecar.sh` against the installed sidecar; the Windows jobs run the same script on the freshly built `metalens-sidecar.exe`. The sample files come from `python -m tests.factories --out <dir> $(cat scripts/smoke_samples.txt)`. To work on this workflow without publishing a beta, push a branch named `ci/<something>`: the `push` trigger of `smoke-packages.yml` then tests the packages of the latest published release. Keep the distribution list to long-supported releases (LTS or recent) and review it when one nears its end of support. The script can be tried locally against any sidecar: `scripts/smoke_sidecar.sh <version> <samples dir> <sidecar command...>`.
+
 ---
 
 ## 🔧 Dependency Updates
