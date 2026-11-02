@@ -23,8 +23,7 @@ def test_describe_error_uses_fixed_vocabulary(exc, expected):
 def test_post_commit_warnings_do_not_leak_the_exception_text(tmp_path, monkeypatch):
     """A failure while restoring metadata after the commit is reported with a fixed
     description; the detail (here a path) goes to the log only."""
-    import core.path_security as security
-    from core.path_security import secure_atomic_write
+    from core import path_security as security
     if not hasattr(security, "_restore_windows_metadata"):
         pytest.skip("Windows-only code path")
     import sys
@@ -36,6 +35,6 @@ def test_post_commit_warnings_do_not_leak_the_exception_text(tmp_path, monkeypat
     def boom(*args, **kwargs):
         raise PermissionError(errno.EACCES, "denied", "C:/very/secret/leak.txt")
     monkeypatch.setattr(security, "_restore_windows_metadata", boom)
-    warnings = secure_atomic_write(target, lambda p: p.write_bytes(b"y"))
+    warnings = security.secure_atomic_write(target, lambda p: p.write_bytes(b"y"))
     assert warnings and all("leak.txt" not in w and "secret" not in w for w in warnings)
     assert "permission denied" in " ".join(warnings)

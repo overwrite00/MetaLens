@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from core.errors import ConcurrentModificationError, TargetNotWritableError
+from core import path_security as security
 from core.path_security import PathSecurityError, secure_atomic_write
 
 windows_only = pytest.mark.skipif(sys.platform != "win32", reason="Windows file attributes")
@@ -131,7 +132,6 @@ def test_hidden_file_failure_keeps_original_and_attributes(tmp_path):
 
 @windows_only
 def test_attributes_applied_to_target_when_replace_drops_them(tmp_path, monkeypatch):
-    import core.path_security as security
     target = tmp_path / "file.txt"
     target.write_bytes(b"original")
     _set_attrs(target, _attrs(target) | HIDDEN)
@@ -363,7 +363,7 @@ def test_write_keeps_the_exact_dacl(tmp_path, case):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("case", DACL_CASES)
 async def test_api_write_and_undo_keep_the_exact_dacl(client, tmp_path, case):
-    target = _dacl_case(tmp_path, case, build=lambda p: _pdf(p), name="file.pdf")
+    target = _dacl_case(tmp_path, case, build=_pdf, name="file.pdf")
     before = _sddl(target)
     resp = await client.post("/write", json={"path": str(target),
                                              "fields": [{"key": "pdf:Title", "value": "New"}]})
@@ -380,7 +380,6 @@ async def test_api_write_and_undo_keep_the_exact_dacl(client, tmp_path, case):
 def test_dacl_restore_failure_is_a_warning_not_an_error(tmp_path, monkeypatch):
     """The content is already committed when the permissions are restored: a failure
     is reported in the returned warnings, never as a failed write."""
-    import core.path_security as security
     target = _dacl_case(tmp_path, "inherited")
 
     def denied(path, sec):
@@ -396,7 +395,6 @@ def test_dacl_restore_failure_is_a_warning_not_an_error(tmp_path, monkeypatch):
 
 def _dropping_replace(monkeypatch):
     """ReplaceFileW stand-in that loses HIDDEN on the target (forces the post-commit step)."""
-    import core.path_security as security
     real = security._windows_replace
 
     def replace(original, replacement, backup):
@@ -406,7 +404,6 @@ def _dropping_replace(monkeypatch):
 
 
 def _failing_attributes_on(monkeypatch, target: Path):
-    import core.path_security as security
     real = security._set_windows_attributes
 
     def set_attributes(path, value):
@@ -456,7 +453,6 @@ async def test_api_reports_post_commit_failure_as_success_with_warning(client, t
 
 @windows_only
 def test_cleanup_failure_after_replace_is_a_warning(tmp_path, monkeypatch):
-    import core.path_security as security
     target = tmp_path / "file.txt"
     target.write_bytes(b"original")
     real = security._remove_tree
@@ -520,19 +516,17 @@ def test_replace_waits_for_a_reader_to_release_the_file(tmp_path):
 
 @windows_only
 def test_persistent_lock_is_file_busy_and_changes_nothing(tmp_path, monkeypatch):
-    import core.path_security as security
-    from core.path_security import FileBusyError
     monkeypatch.setattr(security, "TRANSIENT_RETRY_SECONDS", 0.2)
     target = tmp_path / "file.txt"
     target.write_bytes(b"original")
     with target.open("rb"):                  # blocks the replace
-        with pytest.raises(FileBusyError):
+        with pytest.raises(security.FileBusyError):
             secure_atomic_write(target, _rewrite)
     assert target.read_bytes() == b"original"
     _no_leftovers(target)
     lock = _ExclusiveHandle(target)          # blocks even the copy
     try:
-        with pytest.raises(FileBusyError):
+        with pytest.raises(security.FileBusyError):
             secure_atomic_write(target, _rewrite)
     finally:
         lock.close()
@@ -543,7 +537,6 @@ def test_persistent_lock_is_file_busy_and_changes_nothing(tmp_path, monkeypatch)
 @windows_only
 def test_transient_access_denied_is_retried_then_reported_as_permission(tmp_path, monkeypatch):
     import ctypes
-    import core.path_security as security
     monkeypatch.setattr(security, "TRANSIENT_RETRY_SECONDS", 0.2)
     target = tmp_path / "file.txt"
     target.write_bytes(b"original")
@@ -570,7 +563,6 @@ def test_transient_access_denied_is_retried_then_reported_as_permission(tmp_path
 @windows_only
 def test_file_changed_while_waiting_for_the_lock_is_409(tmp_path, monkeypatch):
     import ctypes
-    import core.path_security as security
     target = tmp_path / "file.txt"
     target.write_bytes(b"original")
 
@@ -588,7 +580,6 @@ def test_file_changed_while_waiting_for_the_lock_is_409(tmp_path, monkeypatch):
 @windows_only
 @pytest.mark.asyncio
 async def test_api_write_on_locked_file_is_503_file_busy(client, tmp_path, monkeypatch):
-    import core.path_security as security
     monkeypatch.setattr(security, "TRANSIENT_RETRY_SECONDS", 0.2)
     target = tmp_path / "file.pdf"
     key, value = _pdf(target)

@@ -814,7 +814,7 @@ async def test_v23_tag_with_itunes_sort_frames_stays_writable(client, journal, t
     import mutagen.id3 as id3
     path = _v23_file(tmp_path, id3.TSOP(encoding=1, text=["Artist, The"]),
                      id3.TSOA(encoding=1, text=["Album, The"]), id3.TSOT(encoding=1, text=["Song"]))
-    token = await _api_write(client, path, {"tag:TIT2": ["New"]})
+    await _api_write(client, path, {"tag:TIT2": ["New"]})
     tags = id3.ID3(path, translate=False)
     assert tags.version == (2, 3, 0) and tags["TIT2"].text == ["New"]
     assert (tags["TSOP"].text, tags["TSOA"].text, tags["TSOT"].text) == (["Artist, The"], ["Album, The"], ["Song"])

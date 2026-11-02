@@ -18,10 +18,9 @@ from typing import Any
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-import api.routes as routes
-from api.routes import ApiCode as ApiCodeNames
+from api import routes
 from core.base_handler import ABSENT, BaseMetadataHandler
-from core.errors import ErrorCode, MetadataValueError
+from core.errors import ErrorCode
 from core.models import MetadataField, MetadataRecord
 from core.registry import HandlerRegistry
 from main import app
@@ -348,7 +347,7 @@ async def test_internal_type_error_is_logged_500_not_422(client, tmp_path, fake,
     with caplog.at_level("ERROR", logger="api.routes"):
         resp = await client.post("/write", json={"path": str(target), "fields": [
             {"key": "fake:title", "value": "New"}]})
-    assert_error(resp, 500, ApiCodeNames.INTERNAL_ERROR, key=None)
+    assert_error(resp, 500, routes.ApiCode.INTERNAL_ERROR, key=None)
     assert any(r.exc_info and r.exc_info[0] is TypeError for r in caplog.records), caplog.records
     assert target.read_bytes() == before
     _no_leftovers(target)
@@ -481,7 +480,7 @@ async def test_route_uses_hooks_in_one_transaction(client, tmp_path, fake, monke
         count.append(args[0])
         return real(*args, **kwargs)
     monkeypatch.setattr(routes, "secure_atomic_write", counting)
-    import core.base_handler as base
+    from core import base_handler as base
     monkeypatch.setattr(base, "secure_atomic_write",
                         lambda *a, **k: pytest.fail("nested transaction opened"))
     resp = await client.post("/write", json={"path": str(target), "fields": [

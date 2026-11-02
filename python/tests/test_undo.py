@@ -462,7 +462,9 @@ def test_journal_limits_unit():
     assert journal.get(t5).pre["format"]["k"] == 2
     journal.update_identity(Path("b"), ("dev", 2), ("dev", 9))
     assert journal.get(t4).identity == ("dev", 9)
-    assert journal.pop(t4) is not None and journal.get(t4) is None
+    popped = journal.pop(t4)
+    assert popped is not None
+    assert journal.get(t4) is None
     journal.clear()
     assert len(journal) == 0
 
@@ -636,7 +638,7 @@ async def test_lossy_undo_is_422_file_intact_entry_kept(client, tmp_path, jsonfa
     assert path.read_bytes() == before
     _no_leftovers(path)
     jsonfake.lose_on_restore = None
-    body = _ok(await _undo(client, token))
+    _ok(await _undo(client, token))
     assert _JsonHandler.load(path) == {"j:a": "1", "j:b": "2"}
 
 
@@ -861,7 +863,7 @@ async def test_unchanged_save_does_not_replace_mutagen_files(client, tmp_path, n
 @pytest.mark.asyncio
 async def test_io_error_during_the_byte_patch_falls_back_to_the_values(client, tmp_path, monkeypatch):
     """B3: a failure after the patch started writing must not leave a half patched file."""
-    import api.byte_patch as byte_patch
+    from api import byte_patch
     path = _build("flac_untagged", tmp_path)
     original = path.read_bytes()
     token = _token(_ok(await _write(client, path, {"tag:title": ["One"]})))
