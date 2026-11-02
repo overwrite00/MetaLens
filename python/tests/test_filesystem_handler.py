@@ -32,6 +32,22 @@ WINDOWS = sys.platform == "win32"
 NS_1900 = -2_208_988_800 * 10**9
 
 
+def _skip_unless_1900_is_stored(directory: Path) -> None:
+    """Some filesystems (ext4 with 128-byte inodes, as on hosted CI runners) clamp dates to 32 bits
+    (1901-12-13): the handler then correctly reports a lossy write, so these tests cannot apply."""
+    probe = directory / ".probe-1900"
+    probe.write_bytes(b"x")
+    try:
+        os.utime(probe, ns=(NS_1900, NS_1900))
+        stored = os.stat(probe).st_mtime_ns
+    except (OSError, OverflowError):
+        stored = None
+    finally:
+        probe.unlink()
+    if stored != NS_1900:
+        pytest.skip("this filesystem cannot store dates before 1901")
+
+
 @pytest.fixture
 def handler():
     return FilesystemHandler()
@@ -67,6 +83,7 @@ def test_timestamps_come_from_ns_with_microsecond_precision(handler, tmp_path):
 
 def test_pre1970_timestamps_are_read_on_every_platform(handler, tmp_path):
     """datetime.fromtimestamp(<0) fails on Windows: every fs: field used to be lost."""
+    _skip_unless_1900_is_stored(tmp_path)
     path = tmp_path / "old.txt"
     path.write_bytes(b"old")
     os.utime(path, ns=(NS_1900, NS_1900))
@@ -195,6 +212,7 @@ def test_canonical_mtime_is_utc(handler):
 
 
 def test_write_mtime_before_1970(handler, plain):
+    _skip_unless_1900_is_stored(plain.parent)
     handler.write(plain, [_mtime_field("1900-01-01T00:00:00+00:00")])
     assert os.stat(plain).st_mtime_ns == NS_1900
     assert _fields(handler.read(plain))["fs:mtime"].value == "1900-01-01T00:00:00+00:00"
@@ -295,7 +313,8 @@ async def test_api_rejects_mtime_without_offset(client, plain):
 
 @pytest.mark.asyncio
 async def test_api_writes_pre1970_mtime(client, tmp_path):
-    path = fs_samples.fs_pre1970(tmp_path)
+    _skip_unless_1900_is_stored(tmp_path)
+    path =fs_samples.fs_pre1970(tmp_path)
     resp = await client.get("/read", params={"path": str(path)})
     assert resp.status_code == 200
     served = {f["key"]: f for f in resp.json()["fields"]}
