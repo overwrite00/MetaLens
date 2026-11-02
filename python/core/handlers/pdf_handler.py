@@ -337,7 +337,7 @@ class _Mutation:
             raise MetadataValueError(None, ErrorCode.READ_ONLY,
                                      f"Editing digitally signed PDFs is not supported: {reason}")
         self.writer = PdfWriter(clone_from=reader)
-        self.xmp, self.xmp_stream, _warning = _xmp_of(self.writer._root_object)
+        self.xmp, self.xmp_stream, _ = _xmp_of(self.writer._root_object)
         self.changed = self.xmp_changed = False
 
     def get(self, name: str):

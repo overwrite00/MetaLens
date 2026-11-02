@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from core.values import binary_descriptor
+
 
 @dataclass
 class MetadataField:
@@ -49,7 +51,6 @@ class MetadataField:
         then ``multi`` and its value a list of descriptors. ``raw_value`` defaults to
         ``data`` (serialized as ``<binary N bytes>``).
         """
-        from core.values import binary_descriptor
         if isinstance(data, (list, tuple)):
             descriptor: Any = [binary_descriptor(bytes(d), mime) for d in data]
             multi = True

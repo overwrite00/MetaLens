@@ -69,7 +69,7 @@ from core.models import MetadataField
 
 __all__ = [
     "TagCodec", "TagMutations", "Id3Codec", "VorbisCodec", "AsfCodec", "ApeCodec",
-    "Placed", "check_text", "codec_for_source", "id3_timestamp_error",
+    "Placed", "check_text", "codec_for_source", "register_codec", "id3_timestamp_error",
 ]
 
 # ──────────────────────── shared helpers ─────────────────────────────────────
@@ -1161,10 +1161,17 @@ def _detach_id3v1(path: Path) -> bytes:
 
 # ──────────────────────── handler mixin ──────────────────────────────────────
 
+_CODECS: dict[str, type] = {"id3": Id3Codec, "vorbis": VorbisCodec, "asf": AsfCodec, "ape": ApeCodec}
+
+
+def register_codec(source: str, codec_cls: type) -> None:
+    """Register a codec defined in another module (``_mp4_codec`` registers ``"mp4"`` when
+    imported, so this module does not import it back)."""
+    _CODECS[source] = codec_cls
+
+
 def codec_for_source(source: str):
-    from core.handlers._mp4_codec import Mp4Codec
-    return {"id3": Id3Codec, "vorbis": VorbisCodec, "asf": AsfCodec, "ape": ApeCodec,
-            "mp4": Mp4Codec}.get(source)
+    return _CODECS.get(source)
 
 
 # TypeError is deliberately absent: a value of the wrong type is rejected by ``canonical``

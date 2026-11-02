@@ -13,9 +13,8 @@ one entry of the uniform error body ``{"ok": false, "errors": [...], "detail": s
 """
 from __future__ import annotations
 
-from core.path_security import PathSecurityError
-
 __all__ = [
+    "PathSecurityError",
     "ErrorCode",
     "MetadataValueError",
     "MetadataValueErrors",
@@ -24,6 +23,10 @@ __all__ = [
     "UndoExpiredError",
     "error_entry",
 ]
+
+
+class PathSecurityError(Exception):
+    """Raised when path validation or a safe write fails (base of the transaction errors)."""
 
 
 class ErrorCode:

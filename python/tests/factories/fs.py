@@ -55,7 +55,7 @@ def _set_times(path: Path, atime_ns: int = ATIME_NS, mtime_ns: int = MTIME_NS) -
 def set_hidden(path: Path) -> None:
     """Add FILE_ATTRIBUTE_HIDDEN (Windows only), keeping the other attributes."""
     import ctypes
-    from ctypes import wintypes
+    import ctypes.wintypes as wintypes
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.SetFileAttributesW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD]
     kernel32.SetFileAttributesW.restype = wintypes.BOOL

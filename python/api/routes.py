@@ -1260,8 +1260,9 @@ def undo(req: UndoRequest):
             _follow_mtime(entry.path, mtime_before, _mtime_ns(entry.path))
             try:
                 UNDO_JOURNAL.update_identity(entry.path, entry.identity, _identity(entry.path))
-            except OSError:
-                pass
+            except OSError as exc:
+                # The undo itself succeeded; the journal just keeps the older identity.
+                logger.debug("undo identity of %s not refreshed: %s", entry.path, exc)
     return {"ok": True, "errors": [], "keys": entry.keys, "undo_token": None, "warnings": warnings}
 
 

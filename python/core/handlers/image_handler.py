@@ -33,7 +33,7 @@ import mmap
 import re
 import struct
 import zlib
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 

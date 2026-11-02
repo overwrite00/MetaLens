@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from core.base_handler import BaseMetadataHandler
-from core.handlers._mp4_codec import MP4_LABELS as _MP4_LABELS, Mp4Codec  # noqa: F401
+from core.handlers._mp4_codec import Mp4Codec
 from core.handlers._tag_codecs import TagMutations
 from core.handlers.hachoir_handler import extract_fields
 from core.models import MetadataField, MetadataRecord

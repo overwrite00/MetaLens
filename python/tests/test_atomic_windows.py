@@ -483,7 +483,7 @@ class _ExclusiveHandle:
 
     def __init__(self, path: Path) -> None:
         import ctypes
-        from ctypes import wintypes
+        import ctypes.wintypes as wintypes
         self._k32 = ctypes.WinDLL("kernel32", use_last_error=True)
         self._k32.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
                                           wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]

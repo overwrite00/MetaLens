@@ -68,7 +68,6 @@ _MAX_PART = 1024 * 1024
 _APP_INT = frozenset({"TotalTime", "Pages", "Words", "Characters", "CharactersWithSpaces", "Lines",
                       "Paragraphs", "DocSecurity", "Slides", "Notes", "HiddenSlides", "MMClips"})
 _APP_BOOL = frozenset({"ScaleCrop", "LinksUpToDate", "SharedDoc", "HyperlinksChanged"})
-_VT_STR = frozenset({"lpwstr", "lpstr", "bstr"})
 _VT_INT = frozenset({"i1", "i2", "i4", "i8", "int", "ui1", "ui2", "ui4", "ui8", "uint"})
 _VT_FLOAT = frozenset({"r4", "r8", "decimal"})
 _VT_DATE = frozenset({"filetime", "date"})
@@ -215,7 +214,7 @@ def _custom_value(node) -> tuple[Any, str]:
         if vt in _VT_DATE:
             return values.format_datetime(values.parse_datetime(text)), "datetime"
     except MetadataValueError:
-        pass
+        return text, "str"   # not of the declared variant type: keep the raw text
     return text, "str"
 
 

@@ -27,6 +27,8 @@ from threading import Lock, RLock
 from typing import Any, Callable
 from pathlib import Path
 
+from core.errors import ConcurrentModificationError, PathSecurityError, TargetNotWritableError
+
 # Metadata mutations are infrequent. One reentrant lock also permits nested
 # transactions without acquiring path locks in inconsistent orders.
 _WRITE_LOCK = RLock()
@@ -41,11 +43,6 @@ __all__ = [
     "PathSecurityError",
     "FileBusyError",
 ]
-
-
-class PathSecurityError(Exception):
-    """Raised when path validation fails."""
-    pass
 
 
 class _RecoveryError(PathSecurityError):
@@ -108,7 +105,7 @@ def windows_open_error(path: Path | str) -> int | None:
     if sys.platform != "win32":
         return None
     import ctypes
-    from ctypes import wintypes
+    import ctypes.wintypes as wintypes
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
                                      wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
@@ -366,9 +363,6 @@ def secure_atomic_write(
         >>> secure_atomic_write(Path("/home/user/file.txt"), writer)
         []
     """
-    # Imported lazily: core.errors subclasses PathSecurityError from this module.
-    from core.errors import ConcurrentModificationError, TargetNotWritableError
-
     target = validate_file_path(str(target_path), must_exist=True)
     if not temp_suffix or any(c in temp_suffix for c in ("/", "\\")):
         raise ValueError("Temporary suffix must not contain path separators")
@@ -492,14 +486,15 @@ class _PartialReplace(Exception):
 
 
 def _windows_replace(target: Path, replacement: Path, backup: Path) -> None:
-    from ctypes import WinDLL, WinError, get_last_error, wintypes
-    replace = WinDLL("kernel32", use_last_error=True).ReplaceFileW
+    import ctypes
+    import ctypes.wintypes as wintypes
+    replace = ctypes.WinDLL("kernel32", use_last_error=True).ReplaceFileW
     replace.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.LPCWSTR,
                         wintypes.DWORD, wintypes.LPVOID, wintypes.LPVOID]
     replace.restype = wintypes.BOOL
     # Do not ignore ACL/stream merge errors: preserving them is required.
     if not replace(str(target), str(replacement), str(backup), 0, None, None):
-        raise WinError(get_last_error())
+        raise ctypes.WinError(ctypes.get_last_error())
 
 
 def _file_identity(path: Path) -> tuple:
@@ -550,7 +545,7 @@ def _kernel32():
     global _KERNEL32
     import ctypes
     if _KERNEL32 is None:
-        from ctypes import wintypes
+        import ctypes.wintypes as wintypes
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         kernel32.GetFileAttributesW.argtypes = [wintypes.LPCWSTR]
         kernel32.GetFileAttributesW.restype = wintypes.DWORD
@@ -609,7 +604,7 @@ def _advapi32():
     global _ADVAPI32
     import ctypes
     if _ADVAPI32 is None:
-        from ctypes import wintypes
+        import ctypes.wintypes as wintypes
         advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
         advapi32.GetFileSecurityW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.LPVOID,
                                               wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
@@ -640,7 +635,7 @@ class _Security:
 
 def _get_file_security(path: Path, info: int) -> bytes:
     ctypes, advapi32 = _advapi32()
-    from ctypes import wintypes
+    import ctypes.wintypes as wintypes
     needed = wintypes.DWORD(0)
     advapi32.GetFileSecurityW(str(path), info, None, 0, ctypes.byref(needed))
     if not needed.value:
@@ -655,7 +650,7 @@ def _set_file_security(path: Path, info: int, descriptor: bytes) -> None:
     ctypes, advapi32 = _advapi32()
     buffer = ctypes.create_string_buffer(descriptor, len(descriptor))
     if info & _DACL_SECURITY_INFORMATION:
-        from ctypes import wintypes
+        import ctypes.wintypes as wintypes
         control, revision = wintypes.WORD(0), wintypes.DWORD(0)
         if not advapi32.GetSecurityDescriptorControl(buffer, ctypes.byref(control), ctypes.byref(revision)):
             raise ctypes.WinError(ctypes.get_last_error())
@@ -671,7 +666,7 @@ def _set_file_security(path: Path, info: int, descriptor: bytes) -> None:
 
 def _sddl(descriptor: bytes, info: int) -> str:
     ctypes, advapi32 = _advapi32()
-    from ctypes import wintypes
+    import ctypes.wintypes as wintypes
     _ctypes, kernel32 = _kernel32()
     buffer = ctypes.create_string_buffer(descriptor, len(descriptor))
     text = wintypes.LPWSTR()
@@ -687,7 +682,7 @@ def _sddl(descriptor: bytes, info: int) -> str:
 def _volume_has_acls(path: Path) -> bool:
     """False on FAT/exFAT and other volumes without persistent ACLs."""
     ctypes, kernel32 = _kernel32()
-    from ctypes import wintypes
+    import ctypes.wintypes as wintypes
     root = ctypes.create_unicode_buffer(1024)
     if not kernel32.GetVolumePathNameW(str(path), root, len(root)):
         return True   # unknown: try, the descriptor read decides

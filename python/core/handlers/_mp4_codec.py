@@ -37,7 +37,7 @@ from typing import Any
 from core.base_handler import ABSENT
 from core.errors import ErrorCode
 from core.handlers._tag_codecs import (TagCodec, _err, _items, _schema, _text_field,
-                                       _validate_generic)
+                                       _validate_generic, register_codec)
 from core.models import MetadataField
 
 __all__ = ["Mp4Codec", "MP4_LABELS"]
@@ -255,3 +255,6 @@ def _denorm(raw) -> Any:
         else:
             out.append(item)
     return out
+
+
+register_codec("mp4", Mp4Codec)

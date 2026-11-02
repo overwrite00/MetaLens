@@ -17,6 +17,7 @@ Fields come from hachoir's metadata objects, never from its human-readable expor
 """
 from __future__ import annotations
 
+import functools
 import logging
 import math
 import threading
@@ -32,17 +33,13 @@ NO_METADATA = "No format-specific metadata available"
 
 _LOG = logging.getLogger("hachoir")
 _capture = threading.local()
-_routed = False
 
-
+@functools.cache
 def _route_hachoir_log() -> None:
     """Send hachoir's own log (printed on stderr by default, e.g. "[warn] Skip
     parser ...") to the ``hachoir`` Python logger instead: warnings at DEBUG,
     errors at WARNING. Errors raised during ``extract_fields`` are also collected
-    as read errors. Idempotent; affects only hachoir's logger."""
-    global _routed
-    if _routed:
-        return
+    as read errors. Idempotent (cached); affects only hachoir's logger."""
     from hachoir.core.log import Log, log
 
     def forward(level, prefix, text, ctxt):
@@ -53,7 +50,6 @@ def _route_hachoir_log() -> None:
 
     log.use_print = False
     log.on_new_message = forward
-    _routed = True
 
 
 class HachoirHandler(BaseMetadataHandler):

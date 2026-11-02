@@ -30,12 +30,9 @@ import math
 import re
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
-from typing import TYPE_CHECKING, Any, Iterable
+from typing import Any, Iterable
 
 from core.errors import ErrorCode, MetadataValueError
-
-if TYPE_CHECKING:  # pragma: no cover
-    from core.models import MetadataField
 
 __all__ = [
     "FIELD_TYPES", "EPOCH",
@@ -305,7 +302,7 @@ def binary_descriptor(data: bytes, mime: str | None = None) -> dict:
 
 # ──────────────────────── canonicalize(field, value) ─────────────────────────
 
-def _canonical_item(field: "MetadataField", value: Any, allow_empty: bool) -> Any:
+def _canonical_item(field: Any, value: Any, allow_empty: bool) -> Any:
     t = field.field_type
     if t in ("str", "text"):
         return parse_str(value, allow_empty=allow_empty)
@@ -346,10 +343,12 @@ def _canonical_choice(choices: list, value: Any) -> Any:
     raise _fail(ErrorCode.INVALID_CHOICE, f"{value!r} is not one of {list(choices)!r}")
 
 
-def canonicalize(field: "MetadataField", value: Any, *, allow_empty: bool = True) -> Any:
+def canonicalize(field: Any, value: Any, *, allow_empty: bool = True) -> Any:
     """Validate ``value`` for ``field`` and return its canonical JSON form.
 
-    Uses ``field.field_type``, ``multi``, ``length`` and ``choices``. Raises
+    ``field`` is a ``core.models.MetadataField`` (duck-typed: this module must not
+    import ``core.models``, which imports it). Uses ``field.field_type``, ``multi``,
+    ``length`` and ``choices``. Raises
     ``MetadataValueError`` with ``key=field.key``. ``allow_empty=False`` rejects
     empty strings for formats that cannot store them.
     """
