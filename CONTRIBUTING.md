@@ -58,7 +58,7 @@ cd python
 python -m venv .venv
 source .venv/bin/activate        # Linux
 # .venv\Scripts\activate         # Windows
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # runtime + test dependencies (requirements.txt = runtime only)
 
 # Electron + frontend
 cd ../electron && npm install
@@ -81,7 +81,9 @@ git config core.hooksPath .githooks
 ### Python
 
 - Follow the handler pattern in `python/core/handlers/` — one file per category, implementing `BaseMetadataHandler`
-- Register new handlers in `python/core/registry.py`
+- Register new handlers in `python/core/handlers/__init__.py` (`HandlerRegistry.register(...)`); `PRIORITY` decides which handler wins (hachoir, `PRIORITY = 100`, is the catch-all)
+- Follow the value model in `python/core/values.py`: canonical JSON values, lists for multi-valued fields (never joined strings), binaries as read-only descriptors, stable keys `<namespace>:<native id>` that never depend on the value or label
+- A handler that marks fields `editable`/`deletable` must implement `apply_write`/`apply_delete` and the `snapshot`/`restore` pair used by the exact Undo, and must not open its own transaction inside them
 - Add type hints on public functions
 
 ### Frontend
@@ -113,20 +115,19 @@ type(scope): description
 
 ### Running Tests
 
-All Python changes must pass the test suite:
+Run the suites affected by your change (CI runs all of them; the Python suite on Linux and Windows):
 
 ```bash
-pytest python/tests/ -v
+pytest python/tests/ -v                                   # sidecar
+cd frontend && npm test && npm run build && npm run verify-icons   # renderer
+cd electron && npm test                                   # Electron main process
 ```
 
 ### Test Requirements
 
 - **New handlers or routes must include tests** in `python/tests/`
-- **All tests must pass**: no regressions allowed
-- After frontend changes, verify the production build still compiles:
-  ```bash
-  cd frontend && npm run build
-  ```
+- **New formats need synthetic samples**: register a builder in the matching module of `python/tests/factories/` (files are generated at runtime, no binaries in the repository). `tests/test_contract.py` then runs the generic contract on it: unique JSON-serializable keys, coherent types, idempotent writes, round-trip of new values, exact Undo of edits and deletions, read-only fields refused. Inspect samples with `python -m tests.factories --out <dir>` (from `python/`)
+- **All tests must pass**: no regressions allowed. If a test encodes old, wrong behavior, update it with an assertion of equal strength and explain why
 
 ---
 
@@ -150,6 +151,7 @@ Fixes #(issue number) or Relates to #(issue number)
 ## Testing
 - [ ] Added tests for new functionality
 - [ ] `pytest python/tests/ -v` passes locally
+- [ ] `npm test` passes in `frontend/` and `electron/` (if touched)
 - [ ] Tested on Windows/Linux (if applicable)
 
 ## Checklist
@@ -177,7 +179,7 @@ MetaLens uses `MAJOR.MINOR.PATCH`, with `python/config.py` → `VERSION` as the 
 | **MINOR** | New feature, new handler, new panel |
 | **MAJOR** | Breaking change, milestone 1.0 |
 
-If your change bumps the version, update all four locations: `python/config.py`, `CHANGELOG.md`, `electron/package.json`, `frontend/package.json`.
+If your change bumps the version, update: `python/config.py`, `CHANGELOG.md`, `electron/package.json` + `electron/package-lock.json`, `frontend/package.json` + `frontend/package-lock.json` (the `"version"` fields; `npm install --package-lock-only` refreshes the lockfiles).
 
 ### Release notes come from the changelog
 
@@ -187,6 +189,10 @@ The body of every GitHub Release is the `CHANGELOG.md` section of that exact ver
 - **Beta** (`develop`): uses the `## [X.Y.Z]` section if it exists, otherwise `## [Unreleased]`, otherwise a short generic text.
 
 Preview what a release will say with `python scripts/changelog_notes.py X.Y.Z`.
+
+### Linux packages
+
+The PyInstaller sidecar embeds the glibc of the machine that builds it, so the Linux jobs in `.github/workflows/build.yml` never use `ubuntu-latest` for it. `build-sidecar-linux-*` builds the sidecar once in a `rockylinux:9` container (glibc 2.34, Python 3.13 from `uv`); `build-linux-*` (`.deb` and `.tar.gz`, on `ubuntu-24.04`) and `build-rpm-*` (`.rpm`, in the same container) reuse it. Do not build the `.rpm` on `ubuntu-26.04`: RPM 6 breaks `electron-installer-redhat` 4.0.0. A workflow change can be tried without publishing a release by dispatching `build.yml` from a temporary branch whose job conditions are relaxed.
 
 ---
 
@@ -200,7 +206,9 @@ To update manually:
 # Python
 pip list --outdated
 pip install --upgrade package_name
-pip freeze > python/requirements.txt
+# then edit the pinned version by hand: runtime packages in python/requirements.txt,
+# test-only packages (pytest, python-docx, ...) in python/requirements-dev.txt
+# (do not use `pip freeze`: it would add transitive and platform-specific packages)
 
 # Node (electron/ or frontend/)
 npm outdated
@@ -211,7 +219,8 @@ Then test thoroughly before committing:
 
 ```bash
 pytest python/tests/ -v
-cd frontend && npm run build
+cd frontend && npm test && npm run build
+cd ../electron && npm test
 ```
 
 ---
@@ -230,5 +239,5 @@ Thank you for contributing to MetaLens! Your efforts help make file metadata man
 
 ---
 
-*Last updated: 2026-10-05*
+*Last updated: 2026-11-02*
 *← [Code of Conduct](./CODE_OF_CONDUCT.md) | [Security →](./SECURITY.md)*

@@ -20,7 +20,7 @@ Step-by-step instructions for installing MetaLens on Windows and Linux, plus bui
 ## 🪟 Windows Installation
 
 1. Go to the [Releases](../../../releases) page
-2. Download **`MetaLens-vX.Y.Z-Setup-Windows.exe`** (latest version)
+2. Download **`MetaLens-X.Y.Z-win-x64.exe`** (latest version; betas are named `MetaLens-X.Y.Z-beta.N-win-x64.exe`)
 3. Double-click the downloaded file
 
 > [!WARNING]
@@ -33,37 +33,44 @@ Step-by-step instructions for installing MetaLens on Windows and Linux, plus bui
 
 ## 🐧 Linux Installation
 
+One set of packages covers every supported distribution: the bundled Python sidecar is built on a
+RHEL 9 baseline (glibc 2.34), so it runs on any distribution with **glibc 2.34 or newer** —
+Ubuntu 22.04 and newer, Debian 12 and newer, RHEL 9 / 10 and compatible (Rocky, AlmaLinux) and
+current Fedora releases.
+
 ### 📦 Debian / Ubuntu (`.deb`)
 
 ```bash
-wget https://github.com/overwrite00/MetaLens/releases/download/vX.Y.Z/MetaLens-vX.Y.Z-Linux.deb
-sudo apt install ./MetaLens-vX.Y.Z-Linux.deb
+wget https://github.com/overwrite00/MetaLens/releases/download/vX.Y.Z/metalens_X.Y.Z_amd64.deb
+sudo apt install ./metalens_X.Y.Z_amd64.deb
 ```
 
 ### 📦 Fedora / RHEL (`.rpm`)
 
 ```bash
-wget https://github.com/overwrite00/MetaLens/releases/download/vX.Y.Z/MetaLens-vX.Y.Z-Linux.rpm
-sudo rpm -i MetaLens-vX.Y.Z-Linux.rpm
+wget https://github.com/overwrite00/MetaLens/releases/download/vX.Y.Z/metalens-X.Y.Z-1.x86_64.rpm
+sudo dnf install ./metalens-X.Y.Z-1.x86_64.rpm
 ```
 
 ### 📦 Any distro (`.tar.gz`)
 
 ```bash
-wget https://github.com/overwrite00/MetaLens/releases/download/vX.Y.Z/MetaLens-vX.Y.Z-Linux.tar.gz
-tar -xzf MetaLens-vX.Y.Z-Linux.tar.gz
-cd MetaLens-vX.Y.Z-Linux
+wget https://github.com/overwrite00/MetaLens/releases/download/vX.Y.Z/MetaLens-X.Y.Z-linux-x64.tar.gz
+tar -xzf MetaLens-X.Y.Z-linux-x64.tar.gz
+cd MetaLens-linux-x64
 ./metalens
 ```
 
 > [!NOTE]
-> 📖 Replace `vX.Y.Z` with the version shown on the [Releases](../../../releases) page.
+> 📖 Replace `X.Y.Z` with the version shown on the [Releases](../../../releases) page. Beta
+> releases are named `X.Y.Z-beta.N` (the `.deb` uses `X.Y.Z.beta.N` and the `.rpm` `X.Y.Zbeta.N`);
+> copy the exact file name from the release page.
 
 ---
 
 ## ✅ Verify Installation
 
-Launch MetaLens, then open **Help → About** (or the About dialog) to confirm the version number matches the one you installed — it's read live from the sidecar's `/health` endpoint.
+Launch MetaLens, then open **Help → About** (or the About dialog) to confirm the version number matches the one you installed. To look for a newer release later, see [Updates](./USAGE.md#-updates).
 
 You should see:
 - ✅ A folder tree on the left (drives and home directory)
@@ -86,7 +93,7 @@ cd python
 python -m venv .venv
 source .venv/bin/activate        # Linux
 # .venv\Scripts\activate         # Windows
-pip install -r requirements.txt
+pip install -r requirements.txt        # runtime only; requirements-dev.txt adds the test dependencies
 
 # 3. Install Node dependencies
 cd ../electron && npm install
@@ -102,6 +109,12 @@ cd ../electron && npm run make
 ```
 
 `npm run make` (Electron Forge) produces the Windows `.exe`, Linux `.deb`/`.rpm` under `electron/out/make/`.
+
+> [!NOTE]
+> The sidecar embeds the glibc of the machine that builds it, so a locally built package only runs
+> on systems at least as recent as yours (the release pipeline builds it on RHEL 9 for that reason). To build
+> the `.rpm` you need `rpmbuild` (`rpm-build`); `electron-installer-redhat` 4.0.0 fails with RPM 4.20 or newer
+> (including RPM 6), so build it on a RHEL 9-compatible system or container.
 
 ---
 
@@ -128,9 +141,9 @@ sudo apt --fix-broken install   # Debian/Ubuntu, after a failed .deb install
 
 ### ❌ App window opens but the file list never loads
 
-**Cause:** The Python sidecar failed to start (rare — usually a port conflict or antivirus blocking the bundled executable).
+**Cause:** The Python sidecar failed to start (rare — usually a port conflict or antivirus blocking the bundled executable). On Linux it can also be the wrong package for your distribution: the sidecar needs a glibc at least as recent as the one it was built on, and fails with `version 'GLIBC_2.xx' not found` otherwise.
 
-**Solution:** Restart the app. If it persists, check that no other process is holding the port MetaLens tries to bind on `127.0.0.1`, and confirm your antivirus isn't quarantining `metalens-sidecar.exe`.
+**Solution:** Restart the app. On Linux, launch `metalens` from a terminal to see the sidecar's error message, and check that your distribution ships glibc 2.34 or newer (`ldd --version`). If it persists, check that no other process is holding the port MetaLens tries to bind on `127.0.0.1`, and confirm your antivirus isn't quarantining `metalens-sidecar.exe`.
 
 ---
 
@@ -149,5 +162,5 @@ sudo apt --fix-broken install   # Debian/Ubuntu, after a failed .deb install
 
 ---
 
-*Last updated: 2026-10-05*
+*Last updated: 2026-11-02*
 *← [Requirements](./REQUIREMENTS.md) | [Usage →](./USAGE.md)*

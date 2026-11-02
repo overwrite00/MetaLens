@@ -1,25 +1,47 @@
-"""Edit only OOXML core properties; preserve macros and all other package parts."""
+"""OOXML packages: edit only docProps/core.xml; preserve macros and all other parts.
+
+* Core properties are typed: ``created``/``modified`` = ``datetime`` (W3CDTF with
+  offset; a value without offset is refused, decision D7), ``revision`` = ``int``
+  (>= 1), the rest ``str``. Values in the file that do not fit are shown
+  read-only (still deletable) with a warning.
+* docProps/app.xml (``office:app.<Name>``) and docProps/custom.xml
+  (``office:custom.<name>``) are read-only (decision D16).
+* Digitally signed packages (``_xmlsignatures/``) are read-only.
+* ``snapshot`` keeps the serialized core-properties nodes of each key, so
+  ``restore`` puts back the exact nodes (attributes included).
+"""
 from __future__ import annotations
 
-from copy import copy
-from datetime import datetime, timezone
+from copy import copy, deepcopy
+from datetime import datetime
 from pathlib import Path
+import math
+import re
 import shutil
 import tempfile
+from typing import Any
 import xml.etree.ElementTree as ET
 from zipfile import ZipFile
 
-from core.base_handler import BaseMetadataHandler
+from core import values
+from core.base_handler import ABSENT, BaseMetadataHandler, Snapshot
+from core.errors import ErrorCode, MetadataValueError, MetadataValueErrors
 from core.models import MetadataField, MetadataRecord
+from core.xmp import invalid_xml_char
 
 _NS = {
     "cp": "http://schemas.openxmlformats.org/package/2006/metadata/core-properties",
     "dc": "http://purl.org/dc/elements/1.1/",
     "dcterms": "http://purl.org/dc/terms/",
+    "dcmitype": "http://purl.org/dc/dcmitype/",
     "xsi": "http://www.w3.org/2001/XMLSchema-instance",
 }
 for _prefix, _uri in _NS.items():
     ET.register_namespace(_prefix, _uri)
+
+_APP_NS = "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"
+_CUSTOM_NS = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"
+_VT_NS = "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"
 
 _PROPS = {
     "title": ("dc:title", "Title"),
@@ -37,7 +59,20 @@ _PROPS = {
     "created": ("dcterms:created", "Created"),
     "modified": ("dcterms:modified", "Modified"),
 }
+_DATES = frozenset({"created", "modified"})
 _CORE_PART = "docProps/core.xml"
+_APP_PART = "docProps/app.xml"
+_CUSTOM_PART = "docProps/custom.xml"
+_MAX_PART = 1024 * 1024
+
+_APP_INT = frozenset({"TotalTime", "Pages", "Words", "Characters", "CharactersWithSpaces", "Lines",
+                      "Paragraphs", "DocSecurity", "Slides", "Notes", "HiddenSlides", "MMClips"})
+_APP_BOOL = frozenset({"ScaleCrop", "LinksUpToDate", "SharedDoc", "HyperlinksChanged"})
+_VT_INT = frozenset({"i1", "i2", "i4", "i8", "int", "ui1", "ui2", "ui4", "ui8", "uint"})
+_VT_FLOAT = frozenset({"r4", "r8", "decimal"})
+_VT_DATE = frozenset({"filetime", "date"})
+
+SIGNED_REASON = "Digitally signed Office package: editing would invalidate the signature"
 
 
 def _qname(name: str) -> str:
@@ -45,40 +80,175 @@ def _qname(name: str) -> str:
     return "{" + _NS[prefix] + "}" + local
 
 
-def _load_core(archive: ZipFile):
-    entries = [item for item in archive.infolist() if item.filename == _CORE_PART]
-    if len(entries) != 1 or entries[0].file_size > 1024 * 1024:
-        raise ValueError("Missing, duplicated or oversized core-properties XML")
+def _local(tag: str) -> tuple[str, str]:
+    if tag.startswith("{"):
+        ns, local = tag[1:].split("}", 1)
+        return ns, local
+    return "", tag
+
+
+def _parse_part(archive: ZipFile, name: str, required: bool):
+    entries = [item for item in archive.infolist() if item.filename == name]
+    if not entries:
+        if required:
+            raise ValueError(f"Missing {name}")
+        return None
+    if len(entries) != 1 or entries[0].file_size > _MAX_PART:
+        raise ValueError(f"Duplicated or oversized {name}")
     raw = archive.read(entries[0])
     if b"<!DOCTYPE" in raw.upper() or b"<!ENTITY" in raw.upper():
         raise ValueError("DTD/entity declarations are not supported")
-    root = ET.fromstring(raw)
+    return ET.fromstring(raw)
+
+
+def _load_core(archive: ZipFile):
+    root = _parse_part(archive, _CORE_PART, required=True)
     if root.tag != _qname("cp:coreProperties"):
         raise ValueError("Invalid core-properties root")
     return root
 
 
+def _is_signed(archive: ZipFile) -> bool:
+    return any(i.filename.lower().startswith("_xmlsignatures/") for i in archive.infolist())
+
+
 def _property_name(key: str) -> str:
     if not key.startswith("office:") or key[7:] not in _PROPS:
-        raise ValueError(f"Unsupported Office property: {key}")
+        raise MetadataValueError(key, ErrorCode.UNKNOWN_FIELD, f"{key}: unsupported Office property")
     return key[7:]
 
 
-def _property_value(name: str, value) -> str:
-    if name in {"created", "modified"}:
-        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+def _schema(name: str, value: Any = None) -> MetadataField:
+    ftype = "datetime" if name in _DATES else "int" if name == "revision" else "str"
+    return MetadataField(f"office:{name}", _PROPS[name][1], value, field_type=ftype, source="office")
+
+
+def _nodes(root, name: str) -> list:
+    tag = _qname(_PROPS[name][0])
+    return [node for node in root if node.tag == tag]
+
+
+def _core_field(name: str, node, warnings: list[str] | None) -> MetadataField:
+    key, label = f"office:{name}", _PROPS[name][1]
+    text = node.text or ""
+
+    def ro(value, ftype):
+        if warnings is not None:
+            warnings.append(f"{key}: value {text!r} is not a valid {_schema(name).field_type}; shown read-only")
+        return MetadataField(key, label, value, raw_value=text, editable=False, deletable=True,
+                             field_type=ftype, source="office")
+
+    if name in _DATES:
+        try:
+            dt = values.parse_datetime(text)
+        except MetadataValueError:
+            try:
+                return ro(values.format_datetime(values.parse_localdatetime(text)), "localdatetime")
+            except MetadataValueError:
+                return ro(text, "str")
+        return MetadataField(key, label, values.format_datetime(dt), raw_value=text,
+                             field_type="datetime", source="office")
     if name == "revision":
-        if isinstance(value, bool) or not str(value).isdigit() or int(value) < 1:
-            raise ValueError("Revision must be a positive integer")
-        return str(int(value))
-    if not isinstance(value, str):
-        raise ValueError(f"{name} must be a string")
-    if any(ord(c) < 32 and c not in "\t\n\r" for c in value):
-        raise ValueError("Office property contains invalid XML characters")
-    return value
+        stripped = text.strip()
+        if not (stripped.isascii() and stripped.isdigit() and int(stripped) >= 1):
+            return ro(text, "str")
+        return MetadataField(key, label, int(stripped), raw_value=text, field_type="int", source="office")
+    return MetadataField(key, label, text, raw_value=text, field_type="str", source="office")
+
+
+def _encode(name: str, value: Any) -> str:
+    if name in _DATES:
+        text = datetime.fromisoformat(value).isoformat()
+        return text[:-6] + "Z" if text.endswith("+00:00") else text
+    return str(value)
+
+
+def _node_bytes(node) -> bytes:
+    clone = deepcopy(node)
+    clone.tail = None
+    return ET.tostring(clone, encoding="utf-8")
+
+
+def _ro(key: str, label: str, value: Any, ftype: str, multi: bool = False) -> MetadataField:
+    return MetadataField(key, label, value, raw_value=value, editable=False, deletable=False,
+                         field_type=ftype, source="office", multi=multi)
+
+
+def _app_fields(root) -> list[MetadataField]:
+    fields = []
+    for child in root:
+        ns, local = _local(child.tag)
+        if ns != _APP_NS:
+            continue
+        key, label = f"office:app.{local}", f"{local} (application)"
+        if local == "TitlesOfParts":
+            items = [(e.text or "") for e in child.iter() if _local(e.tag) == (_VT_NS, "lpstr")
+                     or _local(e.tag) == (_VT_NS, "lpwstr")]
+            if items:
+                fields.append(_ro(key, label, items, "str", multi=True))
+            continue
+        if len(child):
+            continue  # other structured values (HeadingPairs, HLinks, DigSig...)
+        text = child.text or ""
+        if local in _APP_INT and re.fullmatch(r"-?[0-9]+", text.strip(), re.ASCII):
+            fields.append(_ro(key, label, int(text.strip()), "int"))
+        elif local in _APP_BOOL and text.strip().lower() in ("true", "false", "1", "0"):
+            fields.append(_ro(key, label, text.strip().lower() in ("true", "1"), "bool"))
+        else:
+            fields.append(_ro(key, label, text, "str"))
+    return fields
+
+
+def _custom_value(node) -> tuple[Any, str]:
+    _ns, vt = _local(node.tag)
+    text = node.text or ""
+    try:
+        if vt in _VT_INT:
+            return values.parse_int(text.strip()), "int"
+        if vt in _VT_FLOAT:
+            number = values.parse_float(text.strip())
+            if math.isfinite(number):
+                return number, "float"
+        if vt == "bool":
+            return values.parse_bool(text), "bool"
+        if vt in _VT_DATE:
+            return values.format_datetime(values.parse_datetime(text)), "datetime"
+    except MetadataValueError:
+        return text, "str"   # not of the declared variant type: keep the raw text
+    return text, "str"
+
+
+def _custom_fields(root) -> list[MetadataField]:
+    fields = []
+    for prop in root:
+        if prop.tag != "{" + _CUSTOM_NS + "}property" or not prop.get("name"):
+            continue
+        children = [c for c in prop if _local(c.tag)[0] == _VT_NS]
+        if not children or len(children[0]):
+            continue  # vectors / blobs are not shown
+        value, ftype = _custom_value(children[0])
+        name = prop.get("name")
+        fields.append(_ro(f"office:custom.{name}", f"{name} (custom)", value, ftype))
+    return fields
+
+
+def _raise_collected(errors: list[MetadataValueError]) -> None:
+    if len(errors) == 1:
+        raise errors[0]
+    if errors:
+        raise MetadataValueErrors(errors)
+
+
+def _attributed(exc: MetadataValueError, key: str) -> MetadataValueError:
+    return exc if exc.key else exc.with_key(key)
+
+
+def _open_core(path: Path):
+    with ZipFile(path) as archive:
+        if _is_signed(archive):
+            raise MetadataValueError(None, ErrorCode.READ_ONLY,
+                                     "Editing digitally signed Office packages is not supported")
+        return _load_core(archive)
 
 
 class OfficeHandler(BaseMetadataHandler):
@@ -88,61 +258,162 @@ class OfficeHandler(BaseMetadataHandler):
 
     def writable_field(self, path: Path, key: str) -> MetadataField | None:
         name = key[7:] if key.startswith("office:") else ""
-        if name in _PROPS:
-            return MetadataField(key, _PROPS[name][1], "", source="office")
-        return None
+        return _schema(name) if name in _PROPS else None
+
+    def writable_fields(self, path: Path, record: MetadataRecord) -> list[MetadataField]:
+        if not record.format_supports_write or record.read_errors:
+            return []
+        present = {f.key for f in record.fields}
+        return [_schema(n) for n in _PROPS if f"office:{n}" not in present]
 
     def read(self, path: Path) -> MetadataRecord:
-        fields = []
-        errors = []
-        writable = False
+        fields: list[MetadataField] = []
+        errors: list[str] = []
+        warnings: list[str] = []
+        signed = False
         try:
             with ZipFile(path) as archive:
                 root = _load_core(archive)
-                writable = not any(i.filename.startswith("_xmlsignatures/") for i in archive.infolist())
-            for name, (tag, label) in _PROPS.items():
-                node = root.find(_qname(tag))
-                if node is not None:
-                    fields.append(MetadataField(
-                        f"office:{name}", label, node.text or "", source="office",
-                        field_type="datetime" if name in {"created", "modified"} else ("int" if name == "revision" else "str"),
-                        editable=writable, deletable=writable,
-                    ))
-        except Exception as exc:
+                signed = _is_signed(archive)
+                for part, reader in ((_APP_PART, _app_fields), (_CUSTOM_PART, _custom_fields)):
+                    try:
+                        extra = _parse_part(archive, part, required=False)
+                        extra_fields = [] if extra is None else reader(extra)
+                    except (ValueError, ET.ParseError) as exc:
+                        warnings.append(f"{part} could not be read: {exc}")
+                        extra_fields = []
+                    fields.extend(extra_fields)
+            core = []
+            for name in _PROPS:
+                nodes = _nodes(root, name)
+                if nodes:
+                    core.append(_core_field(name, nodes[0], warnings))
+            fields = core + fields
+        except Exception as exc:  # read never raises
             errors.append(f"Office read error: {exc}")
+            fields = []
+        writable = not errors and not signed
         record = self._make_record(path, read_errors=errors,
                                    supports_write=writable, supports_delete=writable)
+        if not writable:
+            for field in fields:
+                field.editable = field.deletable = False
+        record.read_only_reason = SIGNED_REASON if signed and not errors else None
+        record.warnings.extend(warnings)
         record.fields = fields
+        record.dedupe_keys()
         return record
 
+    # ── validation ───────────────────────────────────────────────────────────
+
+    def canonical(self, field: MetadataField, value: Any) -> Any:
+        result = super().canonical(field, value)
+        if field.field_type == "int" and field.key == "office:revision" and result < 1:
+            raise MetadataValueError(field.key, ErrorCode.OUT_OF_RANGE, f"{field.key}: must be >= 1")
+        if isinstance(result, str) and field.field_type in ("str", "text") and invalid_xml_char(result) is not None:
+            raise MetadataValueError(field.key, ErrorCode.INVALID_VALUE,
+                                     f"{field.key}: contains characters not allowed in XML")
+        return result
+
+    # ── mutation hooks ───────────────────────────────────────────────────────
+
+    def apply_write(self, tmp: Path, fields: list[MetadataField]) -> None:
+        root = _open_core(tmp)
+        errors: list[MetadataValueError] = []
+        updates: dict[str, Any] = {}
+        for f in fields:
+            try:
+                name = _property_name(f.key)
+                nodes = _nodes(root, name)
+                current = _core_field(name, nodes[0], None) if nodes else None
+                if current is not None and not current.editable:
+                    raise MetadataValueError(f.key, ErrorCode.READ_ONLY,
+                                             f"{f.key}: value in the file is not valid; delete it first")
+                value = self.canonical(current or _schema(name), f.value)
+                if current is not None and len(nodes) == 1 and current.value == value:
+                    continue  # unchanged: keep the original node
+                updates[name] = value
+            except MetadataValueError as exc:
+                errors.append(_attributed(exc, f.key))
+        _raise_collected(errors)
+        if not updates:
+            return
+        for name, value in updates.items():
+            nodes = _nodes(root, name)
+            for extra in nodes[1:]:
+                root.remove(extra)
+            node = nodes[0] if nodes else ET.SubElement(root, _qname(_PROPS[name][0]))
+            node.text = _encode(name, value)
+            if name in _DATES and node.get(_qname("xsi:type")) is None:
+                node.set(_qname("xsi:type"), "dcterms:W3CDTF")
+        _rewrite_core(tmp, root)
+        # Read-after-write verification (G4).
+        check = _open_core(tmp)
+        for name, value in updates.items():
+            nodes = _nodes(check, name)
+            if len(nodes) != 1 or _core_field(name, nodes[0], None).value != value:
+                raise MetadataValueError(f"office:{name}", ErrorCode.LOSSY_WRITE)
+
+    def apply_delete(self, tmp: Path, keys: list[str]) -> None:
+        root = _open_core(tmp)
+        errors: list[MetadataValueError] = []
+        names = []
+        for key in keys:
+            try:
+                names.append(_property_name(key))
+            except MetadataValueError as exc:
+                errors.append(exc)
+        _raise_collected(errors)
+        changed = False
+        for name in names:
+            for node in _nodes(root, name):
+                root.remove(node)
+                changed = True
+        if changed:
+            _rewrite_core(tmp, root)
+
+    def snapshot(self, tmp: Path, keys: list[str]) -> Snapshot:
+        with ZipFile(tmp) as archive:
+            root = _load_core(archive)
+        snap: Snapshot = {}
+        for key in keys:
+            nodes = _nodes(root, _property_name(key))
+            snap[key] = tuple(_node_bytes(n) for n in nodes) if nodes else ABSENT
+        return snap
+
+    def restore(self, tmp: Path, snap: Snapshot) -> None:
+        root = _open_core(tmp)
+        for key, raw in snap.items():
+            name = _property_name(key)
+            for node in _nodes(root, name):
+                root.remove(node)
+            if raw is not ABSENT:
+                for data in raw:
+                    node = ET.fromstring(data)
+                    if node.tag != _qname(_PROPS[name][0]):
+                        raise MetadataValueError(key, ErrorCode.INVALID_VALUE, f"{key}: snapshot mismatch")
+                    root.append(node)
+        _rewrite_core(tmp, root)
+
+    # ── public wrappers (own transaction) ────────────────────────────────────
+
     def write(self, path: Path, fields: list[MetadataField]) -> None:
-        updates = {_property_name(f.key): _property_value(_property_name(f.key), f.value) for f in fields}
-        self._atomic_write(path, lambda tmp: _rewrite_properties(tmp, updates, set()))
+        self._atomic_write(path, lambda tmp: self.apply_write(tmp, fields))
 
     def delete(self, path: Path, keys: list[str]) -> None:
-        names = {_property_name(key) for key in keys}
-        self._atomic_write(path, lambda tmp: _rewrite_properties(tmp, {}, names))
+        self._atomic_write(path, lambda tmp: self.apply_delete(tmp, keys))
 
 
-def _rewrite_properties(path: Path, updates: dict[str, str], removed: set[str]) -> None:
-    # Stream untouched entries instead of rebuilding via an Office library,
-    # which can discard VBA, custom XML, shapes and vendor extensions.
-    with ZipFile(path) as source:
-        if any(i.filename.startswith("_xmlsignatures/") for i in source.infolist()):
-            raise ValueError("Editing digitally signed Office packages is not supported")
-        root = _load_core(source)
-        for name in removed | updates.keys():
-            tag = _qname(_PROPS[name][0])
-            for node in list(root):
-                if node.tag == tag:
-                    root.remove(node)
-            if name in updates:
-                node = ET.SubElement(root, tag)
-                node.text = updates[name]
-                if name in {"created", "modified"}:
-                    node.set(_qname("xsi:type"), "dcterms:W3CDTF")
-        raw = ET.tostring(root, encoding="utf-8", xml_declaration=True)
-        with tempfile.TemporaryFile(dir=path.parent) as output:
+def _rewrite_core(path: Path, root) -> None:
+    """Replace docProps/core.xml, streaming every other member unchanged.
+
+    An Office library would rebuild the package and can drop VBA, custom XML,
+    shapes and vendor extensions. The result is written back into the same file
+    opened ``r+b`` (never recreated: Windows refuses ``wb`` on hidden files).
+    """
+    raw = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    with tempfile.TemporaryFile(dir=path.parent) as output:
+        with ZipFile(path) as source:
             with ZipFile(output, "w") as destination:
                 destination.comment = source.comment
                 for info in source.infolist():
@@ -151,7 +422,7 @@ def _rewrite_properties(path: Path, updates: dict[str, str], removed: set[str]) 
                     else:
                         with source.open(info) as reader, destination.open(copy(info), "w") as writer:
                             shutil.copyfileobj(reader, writer)
-            source.close()
-            output.seek(0)
-            with path.open("wb") as target:
-                shutil.copyfileobj(output, target)
+        output.seek(0)
+        with path.open("r+b") as target:
+            shutil.copyfileobj(output, target)
+            target.truncate()

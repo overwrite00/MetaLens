@@ -1,0 +1,17 @@
+# MetaLens — development and test dependencies (not bundled in the sidecar).
+# Install with: pip install -r requirements-dev.txt   (includes the runtime requirements)
+-r requirements.txt
+
+# Test frameworks
+pytest==9.2.0
+pytest-asyncio==1.4.1
+httpx==0.28.1
+
+# Used only to generate sample files in tests/factories (the sidecar reads Office
+# packages with zipfile + ElementTree and does not import them)
+python-docx==1.2.0
+openpyxl==3.1.5
+python-pptx==1.0.2
+
+# Used only by the Windows tests (DACL inspection); the sidecar uses ctypes
+pywin32==312; sys_platform == "win32"

@@ -15,6 +15,260 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ---
 
+## [0.4.0] — 2026-11-02
+
+### Security
+- API responses no longer contain the raw text of an exception (which could carry paths or library
+  internals): warnings and Undo notices use a short fixed description (`describe_error`, e.g. "permission
+  denied"); the full detail goes to the local log only.
+- Deleting GPS (or any EXIF field) from a JPEG that contained a second, duplicated APP1 Exif segment
+  left the old copy, GPS coordinates included, in the file. EXIF is now rewritten in place in the first
+  Exif segment and duplicates are removed (with a warning), so no byte of the deleted data remains.
+- Digitally signed PDFs (`/SigFlags`, a signed `/FT /Sig` field, `/Perms`) were rewritten silently,
+  invalidating the signature. They are now read-only, with the reason shown, like encrypted PDFs and
+  signed Office packages.
+
+### Added
+- **Folder tree navigation.** The Home bookmark now expands the tree along the whole path (drive → … → Home),
+  selects the folder and scrolls it into view. Right-clicking a folder opens a menu: *Expand* / *Collapse*
+  (that folder only), *Expand all* (every folder of the tree; folders not yet loaded are read down to 3
+  levels from the drive root) and *Collapse all*.
+- **Update check.** *Help → Check for Updates…* and *About → Check for updates* look up the latest
+  release on GitHub. A stable build is only offered newer stable releases; a beta build is also
+  offered newer betas and the stable release of its version, and the dialog says which kind it is.
+  The release notes are shown, with **Release page**, **Ignore this version** / **Stop ignoring**
+  and, on Windows installed builds, **Download & install**: the installer is downloaded to a
+  temporary folder, verified against the size and SHA-256 digest published by GitHub (a mismatch
+  discards it), then started while MetaLens closes. The download can be cancelled. On Linux only
+  the release page is offered.
+- The check never runs on its own by default: a **Check for updates automatically at startup**
+  option (off by default) is stored in `settings.json` in the app data folder. When on, a new
+  version shows an **Update vX.Y.Z** button in the toolbar; a failed startup check stays silent.
+  All requests are made by the Electron main process, which only talks to the
+  `overwrite00/MetaLens` releases and never accepts URLs from the renderer.
+- The About dialog links to the project repository on GitHub, and can be closed with Esc.
+- **XMP and IPTC for JPEG**, read and written: XMP (`xmp:<prefix>:<property>`, e.g. `xmp:dc:title`,
+  `xmp:dc:subject`, `xmp:photoshop:City`; language alternatives and Bag/Seq lists) and IPTC-IIM in the
+  Photoshop APP13 segment (`iptc:Keywords`, `iptc:By-line`, `iptc:Caption-Abstract`, ...; repeatable
+  datasets as lists, written as UTF-8 with the `ESC % G` marker). Everything not edited (other XMP
+  properties, other 8BIM resources and IIM datasets) is preserved. Extended XMP and legacy IPTC
+  character sets are read-only. XMP is also read from WebP.
+- **IPTC and XMP stay in step**: editing or deleting an IPTC dataset also updates its XMP twin already in the file
+  (and the other way round) in the same verified transaction, with one Undo; nothing is created on the other
+  side and a value the twin cannot store is skipped with a note in `warnings`.
+- **Byte-identical Undo**: the journal also keeps the original bytes of the region a save changed, so undoing a
+  save gives back the very same file (FLAC padding, the MP4 `meta` atom, XMP/`core.xml` order included); if the
+  region was changed by a later save, the Undo falls back to restoring the values.
+- **Undo chains**: a save that set the modification time no longer makes its Undo fail after later saves (any
+  rewrite moves the mtime; only a change by another program is still refused with 409); saving a tag value
+  that is already stored leaves MP3/FLAC/WAV/OGG/M4A/WMA files untouched; an I/O error during the byte patch
+  falls back to restoring the values instead of leaving a damaged file.
+- **Safer sync and verification**: the IPTC digest is refreshed only when every IPTC/XMP pair in the file agrees;
+  read-only fields that are not derived from the file are now checked after a save too; an XMP twin that does not
+  fit its segment is skipped with a note instead of failing the save; a byte patch no longer pushes other Undo
+  entries out of the journal.
+- **Safer mirrored deletes**: deleting an IPTC dataset no longer removes the XMP twin when it holds other
+  language alternatives (e.g. a German title next to the default one): the twin is kept and the response says so.
+  Files read by the generic reader (unknown types) now explain why their format metadata is read-only.
+  A file that changes while the Undo patch is prepared falls back to the value-level Undo instead of failing.
+- **Exact Undo on the server**: `/write` and `/delete` return an `undo_token`; the new `POST /undo`
+  restores the original bytes of every touched field (pictures, cover art, MakerNote and multi-valued
+  fields included) in one verified transaction. It is refused (409) if the file or the fields changed
+  meanwhile, and answers 410 for unknown or evicted tokens. The journal is in memory only (50 entries,
+  64 MiB) and is lost when the app closes. The file's modification time is not restored implicitly.
+- `/write` accepts an optional `delete` list, so edits and deletions are one atomic save.
+- **Adding fields** in the editor (*Add field*) from the server's `addable_fields`: e.g. EXIF/XMP/IPTC
+  fields on a JPEG, ID3 tags on untagged MP3/WAV/AIFF, Vorbis comments on untagged FLAC/Ogg, a title on
+  an MP4/MOV without tags, PDF and Office core properties.
+- **Typed editor**: numbers, checkboxes, dropdowns, exact rationals, list editor for multi-valued
+  fields, fixed-size pairs (track/disc), date-time with UTC offset; binary fields can only be deleted.
+  Notices show why the format is read-only, read errors and warnings.
+- Records now expose `format_supports_write`, `format_supports_delete`, `read_only_reason`,
+  `warnings` and `addable_fields`; fields expose `multi`, `length`, `binary` and always `choices`.
+- New read-only metadata: Office `docProps/app.xml` (`office:app.*`) and `docProps/custom.xml`
+  (`office:custom.*`); OLE `DocumentSummaryInformation` (company, manager, category, ...) and
+  user-defined properties; PNG `eXIf` and WebP EXIF; GIF comment; `pdf:signed`.
+- The PDF XMP packet is kept in sync with the edited document-info entries (title, author, subject,
+  keywords, creator tool, producer, dates); the rest of the packet is preserved.
+- Unknown extensions and files without extension are read by hachoir from their content (e.g. a WAV
+  renamed `.bin` or a JPEG without extension).
+
+### Changed
+- Test-only packages (pytest, python-docx, openpyxl, python-pptx, pywin32) moved to `python/requirements-dev.txt`;
+  `python/requirements.txt` is the sidecar's runtime set. The sidecar build no longer bundles python-docx, openpyxl
+  or python-pptx (it reads Office packages with `zipfile`/`ElementTree`; verified by running the sidecar in an
+  environment with only the runtime requirements).
+- `file_busy` and `file_not_found` are `ErrorCode` constants like the other error codes.
+- `/write` and `/delete` responses carry `undo_unavailable`; `/diff` ignores `fs:atime` and `fs:ctime`.
+- Version bumped to 0.4.0 (new feature). The fixes below, previously tracked as 0.3.6 betas, ship
+  in 0.4.0; there is no 0.3.6 stable release.
+- Privacy statements (README, SECURITY, requirements) now say "offline by default" instead of
+  "no network calls": the update check is the only network access and is user-initiated or opt-in.
+- **API error body**: every error, authentication included, is now
+  `{"ok": false, "errors": [{"code", "key", "message"}], "detail": "<summary>"}` with stable codes;
+  all validation problems of a request are reported together, one per key, before the file is touched.
+  A value-related library error is a 422, never a 500.
+- A file that cannot be written (read-only attribute, permissions) now returns **403** `not_writable`
+  instead of 409; 409 is reserved for concurrent modification, 410 for expired Undo tokens.
+- `/hash` with no algorithm (`algorithms=`) returns 400.
+- `/diff` compares the same record as `/read`, filesystem layer included, and binary values by SHA-256.
+- **Values are typed and canonical** (`python/core/values.py`): multi-valued tags are JSON lists
+  instead of strings joined with `; `, numbers are numbers, booleans are booleans, rationals keep their
+  exact `n/d` form, dates are ISO 8601 (`datetime` with UTC offset, `localdatetime` for EXIF), binaries
+  are `{size, sha256, mime}` descriptors. `img:dpi` is a `[x, y]` number pair (was `"72 x 72"`),
+  `fs:win_attrs` a list of flags, hachoir values typed (durations in seconds, dates as ISO).
+- **Changed keys** (keys are not stored anywhere, but scripts using the API must adapt): `.m4a`/`.m4b`
+  tags use `mp4:<atom>` like MP4/MOV (were `tag:<atom>`); hachoir fields are
+  `hachoir:<group index>:<item key>` (were derived from the label, and could collide); the MP4 bitrate
+  is `audio:bitrate` of the first audio track (`video:bitrate` removed); ID3 URL frames are grouped by
+  FrameID (`tag:WOAR`), PRIV frames keyed by owner, never by value.
+- The filesystem handler is now a layer added to every record, no longer a primary handler: `/list`
+  reports `hachoir` for files with no dedicated handler.
+- Only `fs:mtime` is writable at the filesystem level (now with UTC offset required, exact to the
+  microsecond and verified); extended attributes are writable only in the Linux `user.` namespace with
+  UTF-8 values (non-UTF-8 values are binary, other namespaces and macOS read-only).
+- Every save runs in one transaction: validation, changes on a private copy, read-back verification
+  (a library that drops or alters anything makes the save fail with 422 and leaves the file intact),
+  then replace. The file was previously copied twice for API writes.
+- Office dates without UTC offset are refused (422) instead of being treated as UTC.
+
+### Fixed
+- **A save that changes nothing no longer replaces the file.** Writing the values a file already has used to swap in
+  an identical copy, which detached hard links and changed the file id. The transaction is now discarded instead.
+- **Editing IPTC no longer makes other apps prefer a stale XMP.** The Photoshop IPTC digest (0x0425) tells MWG-aware
+  readers that the XMP is in sync with the IPTC block and wins over it. It is now refreshed only when the XMP is
+  written in the same save (or none exists); otherwise the old digest stays and the edited IPTC takes precedence.
+- **Undo no longer reports a false conflict** when another program inserted or removed a neighbouring XMP property or
+  IPTC dataset after the save: the position of a value is a restore hint, not part of what is compared.
+- **Integers beyond 2^53** (MP4 `plID`, ASF QWORD) are shown exactly and can be edited: the renderer keeps them as
+  decimal strings and the sidecar parses them exactly.
+- A saved change's server warnings (e.g. a file owner that could not be restored) are shown in the editor and after
+  an Undo; a transient `503 file_busy` during Undo keeps the Undo entry so it can be retried.
+- An internal `TypeError` inside the tag codecs is reported as 500 instead of a validation error.
+- **Windows: writes no longer drop the folder's inherited permissions.** Every save used to leave the file with
+  only the explicit ACEs plus SYSTEM/Administrators/owner, so other accounts (Users, a media server's account) lost
+  access. The effective DACL (inheritance and protection flags included) is now identical before and after.
+- **Windows: the Archive attribute is set after a modification**, as for any other write (backup tools relying on
+  it see the change).
+- **Windows: reads and writes that overlap another program's access no longer fail with 500.** Transient sharing
+  violations are retried briefly; a file that stays locked answers 503 `file_busy` (404 if it vanished).
+- **Multi-picture JPEG (MPO/MPF) files stay valid** when EXIF, XMP or IPTC are edited: the MP index offsets are
+  recomputed, and edits that cannot be done safely leave the file read-only instead of corrupting the second image.
+- **Malformed EXIF can no longer make `/read` or `/diff` fail with 500.** A broken IFD1 thumbnail pointer (count 0,
+  wrong or unknown type), also inside PNG eXIf chunks, now yields a read-only EXIF with a warning.
+- JPEGs with stray bytes between segments are read leniently (EXIF/XMP/IPTC visible, writing disabled) instead of
+  showing no EXIF at all.
+- **Saving an EXIF field without changing it no longer rewrites the file** (no MakerNote shift, no mtime change, no
+  undo entry), and Undo of an EXIF edit restores the original block layout, so a MakerNote with absolute offsets
+  resolves again.
+- Undo of an IPTC edit removes the UTF-8 marker added by the write; XMP edits reuse the packet padding instead of
+  failing near 64 KB; an empty `dc:subject` bag can be filled.
+- Undo of a deleted Vorbis/ASF entry puts it back at its original position; Undo of a tag added to a WAV/AIFF file
+  without tags removes the empty ID3 chunk; ID3 timestamps are validated against real calendar ranges.
+- A saved change that exceeds the Undo budget (e.g. deleting a 70 MB cover) is reported by the server
+  (`undo_unavailable`) and shown in the editor instead of looking like a plain "Saved".
+- `fs:mtime` is read-only on files with the READONLY attribute (the write was refused anyway); PDFs with very large
+  streams answer 422 instead of 500; internal `TypeError`s are no longer reported as validation errors.
+- Closing the app no longer throws in the menu-listener cleanup if `window.electronAPI` is gone.
+- Documentation said the About dialog reads the version from the sidecar's `/health`; it shows the
+  packaged app version (`app.getVersion()`, including the beta suffix). Corrected in the guides.
+- The folder panel **Refresh** button no longer collapses the tree and drops the current
+  folder. It now re-reads the drive list and every expanded folder (keeping expansion and
+  selection), and reloads the file list of the selected folder, keeping the still-existing file
+  selection. If the selected folder was deleted or renamed, the selection moves to the nearest
+  existing parent folder; folders that are listed but temporarily unreadable keep their state.
+- JPEG photos straight from a camera (EXIF resolution stored as rationals) could not be edited at all:
+  reading the DPI failed and blocked every write, delete and Undo (also for any JPEG after its first
+  MetaLens edit). TIFF/JPEG DPI is now read correctly.
+- Editing EXIF no longer drops the JFIF APP0 segment; only the touched segment changes, every other
+  segment and the image data stay byte-identical. Unknown EXIF tags survive a rewrite.
+- EXIF rationals and pairs were altered on save (`1234/100` became `617/50`, `0/0` became `0/1`,
+  SubjectArea shown as text); they now round-trip exactly. Invalid EXIF dates (`garbage`) are refused,
+  oversized text gets a 422 instead of a broken segment, Latin-1 EXIF text is shown without U+FFFD and
+  restored byte for byte, UserComment and XP tags are decoded as text, `UNDEFINED` values such as the
+  MakerNote are shown as binary (read-only, deletable).
+- Multi-valued audio tags (several artists or genres in ID3 or Vorbis comments) were joined into one
+  string and saved back as a single value; they are lists now.
+- ID3 lyrics (`USLT`) showed only the first character; the whole text is shown and edited.
+- Binary and structured frames (APIC, GEOB, PRIV, POPM, PCNT, SYLT, WM/Picture, APE binaries, FLAC
+  pictures) were shown as editable text and an Undo wrote a string in place of the picture; they are
+  read-only descriptors, deletable and restored exactly. ASF integers and booleans keep their type.
+- Text that does not fit an ID3 frame's Latin-1 encoding caused a 500; the frame is upgraded to UTF-8
+  (v2.4) or UTF-16 (v2.3). Saving an ID3v2.3 file no longer converts it to v2.4.
+- AAC files claimed to be writable and failed on save; they are read-only.
+- MP4: track/disc pairs (`trkn`, `disk`), BPM (`tmpo`), compilation (`cpil` stayed true when set to
+  false), cover art (`covr`) and freeform atoms (UTF-8 values editable, others binary) are handled with
+  their real types.
+- Legacy Office (OLE) text is decoded with the file's codepage (UTF-16 and UTF-8 included), total
+  editing time is a duration instead of a bogus date, the thumbnail is binary, malformed properties no
+  longer hide the others.
+- hachoir fields with the same label (e.g. the duration of two streams) overwrote each other.
+- Filesystem timestamps before 1970 failed on Windows and hid every filesystem field; each field is
+  now read on its own and a failure becomes a warning.
+- Hidden (or system) files on Windows could not be edited (the temporary copy inherited the attribute); they are
+  written and stay hidden.
+- PDF: `null` or invalid dates are refused, `/Trapped` keeps its name type instead of becoming text,
+  `pdf:encrypted` has the `bool` type.
+- **Undo** writes back the exact original bytes instead of re-sending the displayed values (which lost
+  binaries, multi-valued fields and legacy encodings); deleting several fields and undoing restores all
+  of them. A failing Undo entry no longer blocks the stack: entries that can no longer be undone (file
+  changed: 409, expired: 410) are removed with a message, other errors can be retried.
+- **Ctrl+Z** inside a text field undoes the typing instead of undoing the last save of the file.
+- Error messages in the UI no longer show `[object Object]`; lists and binary values are shown the
+  same way in the table, the diff and the CSV export, and two different binaries of the same size are
+  no longer reported as identical.
+
+### Tests
+- Synthetic samples generated at runtime for every supported format (`python/tests/factories/`, 57
+  samples, no binaries in the repository) and a generic contract test run on each of them (unique
+  keys, coherent types, idempotent writes, round-trip of new values, exact Undo of edits, deletions
+  and bulk deletions, read-only fields refused, error body shape).
+- New suites for values, models, API contract, Undo, Windows atomic writes, and each handler
+  (image/XMP/IPTC/segment writer, audio codecs, MP4, PDF, Office, OLE, hachoir, filesystem); React
+  tests for value rendering, the typed editor and token-based Undo.
+- Python suite: 1364 passed, 14 skipped on Windows (platform-specific tests are skipped on the
+  other platforms).
+
+### Dependencies
+- Python: fastapi 0.141.1 → 0.162.0, pypdf 6.21.2 → 6.21.4, pytest 9.1.1 → 9.2.0,
+  pytest-asyncio 1.4.0 → 1.4.1.
+- Frontend: react and react-dom 19.3.0 → 19.3.1, lucide-react → 1.65.0, @vitejs/plugin-react
+  6.1.1 → 6.1.2. Electron: 44.9.3 → 45.1.0.
+- GitHub Actions: github/codeql-action 4.38.2 → 4.39.1.
+- Tests: with pytest 9.2 `monkeypatch.setattr` on Starlette's `app.state` removes the attribute at
+  teardown; `python/tests/conftest.py` now restores the sidecar token with an autouse fixture.
+
+### CI/CD
+- Test jobs install `python/requirements-dev.txt`; the PyInstaller build jobs install only the runtime
+  `python/requirements.txt` and no longer pass `--hidden-import` for python-docx, openpyxl and python-pptx.
+- Prepare the release pipeline for GitHub moving `ubuntu-latest` to Ubuntu 26.04 (rollout
+  2026-10-19 → 2026-11-19). The PyInstaller sidecar embeds the glibc of the build machine: built on
+  `ubuntu-24.04` it needs glibc 2.38 and did not start on Debian 12 or Ubuntu 22.04.
+- The Linux sidecar is now built once in a `rockylinux:9` container (glibc 2.34) and reused by the
+  `.deb`, `.tar.gz` and `.rpm` jobs, so a single set of Linux packages runs on Ubuntu 22.04+,
+  Debian 12+, Fedora and RHEL 9/10. Python 3.13 in the container comes from `uv`.
+- The `.rpm` is built in that same container (rpm 4.16): on Ubuntu 26.04 RPM 6 breaks
+  `electron-installer-redhat` 4.0.0 and emits RPM v6 packages. The `.deb` and `.tar.gz` keep using
+  `ubuntu-24.04`.
+- Linux asset names: `metalens_<version>_amd64.deb`, `metalens-<version>-1.x86_64.rpm`,
+  `MetaLens-<version>-linux-x64.tar.gz`.
+- The Python test suite also runs on `windows-latest` (job `test-python-windows`), where the atomic
+  replace, file attributes, NTFS streams/DACLs and pre-1970 timestamps behave differently. It does not
+  gate the beta and stable packaging jobs.
+
+### Documentation
+- New *Updates* section in the usage guide; privacy and security pages describe the update check.
+- Installation and requirements guides describe the Linux packages, the glibc 2.34 baseline and
+  the glibc troubleshooting case; `CONTRIBUTING.md` documents how the Linux jobs are split.
+- The README, usage guide, API reference and security pages describe what the application actually
+  does: formats and fields that are really writable, the error body and status codes, `/undo`, the
+  value model and a table of key namespaces; claims that were not true were removed (e.g. "blocks
+  traversal", libraries used only by tests, `/health` without `app`, the Windows installer name,
+  Node.js 20). `CONTRIBUTING.md` explains samples and the contract test for new handlers and no longer
+  suggests `pip freeze > requirements.txt`.
+
+---
+
 ## [0.3.5] — 2026-10-27
 
 ### Security

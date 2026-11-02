@@ -249,7 +249,8 @@ async def test_api_delete_then_restore_uses_server_permissions(client, tmp_path,
         tags = id3.ID3()
         tags.add(id3.COMM(encoding=3, lang="eng", desc="custom", text=["Original"]))
         tags.save(target)
-        key, value = "tag:COMM:custom:eng", "Original"
+        # COMM is multi-valued text: values are lists (str[]), never joined strings.
+        key, value = "tag:COMM:custom:eng", ["Original"]
     response = await client.post("/delete", json={"path": str(target), "keys": [key]})
     assert response.status_code == 200, response.text
     response = await client.post("/write", json={"path": str(target), "fields": [

@@ -4,12 +4,13 @@
 
 MetaLens is designed with security-first principles:
 
-- **Fully offline** — all metadata reading and writing happens on your machine; there is no network call anywhere in the app
+- **Offline by default** — all metadata reading and writing happens on your machine. The only network access is the update check (see below), which runs only when you click *Check for updates* or have enabled the opt-in startup check
 - **Localhost-only sidecar** — the Python (FastAPI) backend binds to `127.0.0.1` only, on a dynamically chosen port, never `0.0.0.0`
 - **Electron hardening** — `nodeIntegration: false`, `contextIsolation: true`, `sandbox: true`; IPC accepts only the application's main frame. Navigation and popups are blocked and a Content Security Policy limits renderer resources
 - **Authenticated sidecar** — a fresh random token is generated for each session, passed to Python through the environment and sent in an Authorization header. Requests without valid credentials are rejected; localhost binding alone is not treated as authentication
-- **Atomic writes** — changes are prepared in a private temporary directory beside the target, with checks for concurrent modification before replacement. Audio and video use the same mechanism. Writer failures leave the original content intact
-- **Path validation** — a dedicated `core.path_security` module validates and normalizes every path (resolves symlinks, blocks traversal) before any filesystem access, across all API routes
+- **Atomic, verified writes** — every save (edits and deletions together) is prepared on a copy in a private temporary directory beside the target, read back and checked against the request, and checked for concurrent modification before the copy replaces the original (`ReplaceFileW` on Windows, preserving the security descriptor, alternate data streams and file attributes such as *hidden*; `os.replace` elsewhere). Any failure leaves the original content intact. The replacement is a new file, so hard links to the original are detached. A read-only file is refused (HTTP 403), not modified
+- **Path validation** — a dedicated `core.path_security` module normalizes every path (resolves `~`, `..` and symbolic links) and checks that it is an existing, readable regular file or directory before any filesystem access, across all API routes. This is normalization, not a sandbox: an authenticated caller may name any file the user account can access, which is why every request must carry the session token
+- **Hardened update check** — requests are made by the Electron main process, never by the renderer (whose CSP still only allows the local sidecar). It queries the GitHub Releases API of `overwrite00/MetaLens` only, and the renderer cannot supply URLs. Release and asset URLs must point to that repository, and the installer is downloaded only when you click *Download & install* (Windows installed builds), checked against its size and the SHA-256 digest published by GitHub, and discarded on any mismatch. Release notes are shown as plain text
 - **Transparent code** — all handler and analysis logic is open-source and auditable
 
 ---
@@ -22,13 +23,13 @@ MetaLens is designed with security-first principles:
 - ❌ No telemetry or usage tracking
 - ❌ No data collection or analytics
 - ❌ No cloud processing or storage
-- ❌ No auto-update phone-home (updates are manual, via GitHub Releases)
+- ❌ No automatic phone-home: the update check is manual, or opt-in (off by default) at startup
 
 ### Data Control
 
 - ✅ Your files and their metadata never leave your machine
-- ✅ Nothing is written anywhere except the file you explicitly edit
-- ✅ The undo stack lives in memory only — it is cleared when you close the app, never written to disk
+- ✅ Nothing is written anywhere except the file you explicitly edit (and its short-lived private temporary copy beside it, removed after the save)
+- ✅ The undo stack and the sidecar's Undo journal (original values of the last 50 saves, at most 64 MiB) live in memory only — they are cleared when you close the app, never written to disk
 - ✅ Full source code transparency
 
 ---
@@ -37,14 +38,15 @@ MetaLens is designed with security-first principles:
 
 ### Metadata Handlers
 
-- Uses established, audited libraries per format: Pillow/piexif (images), mutagen (audio/video), pypdf (PDF), python-docx/openpyxl/python-pptx (Office), olefile (legacy Office), hachoir (fallback)
-- Field capabilities are enforced by the API; client-provided editability flags cannot override them. Image metadata outside supported JPEG EXIF, encrypted PDFs, digitally signed Office packages, legacy Office and MKV/AVI are read-only. Writable filesystem fields are handled separately
+- Uses established libraries per format: Pillow (image properties), piexif tag tables plus MetaLens's own structure-preserving EXIF/XMP/IPTC codecs and JPEG segment writer (images), mutagen (audio/MP4), pypdf (PDF), Python's `zipfile`/`xml.etree` (Office Open XML packages), olefile (legacy Office), hachoir (read-only fallback for other formats). XMP packets (JPEG, PDF) containing DOCTYPE or entity declarations are refused
+- Field capabilities are enforced by the API; client-provided editability flags cannot override them. Writable: JPEG EXIF/XMP/IPTC, audio tags (except AAC), MP4/MOV atoms, PDF document info, Office core properties, `fs:mtime` and Linux `user.` extended attributes. Read-only: other image formats and RAW, AAC, MKV/AVI and other non-MP4 video, encrypted or digitally signed PDFs, digitally signed Office packages (so a signature is never silently invalidated), Office `app.xml`/`custom.xml`, legacy Office, everything read through hachoir
+- Every value is validated before the file is touched; library errors caused by a value are reported as validation errors (HTTP 422), never as crashes
 - Filesystem access always goes through `validate_file_path`/`validate_directory_path` before touching disk
 
 ### IPC Boundary
 
 - The Electron renderer talks to the OS only through the `preload.js` `contextBridge` surface (dialogs, path helpers, drive listing) — no direct filesystem or process access
-- The renderer talks to the Python sidecar only over HTTP to `127.0.0.1:{dynamic_port}`, never a hardcoded port
+- The renderer talks to the Python sidecar only over HTTP to `127.0.0.1:{dynamic_port}` (never a hardcoded port), with the port and session token obtained from the main process through the `get-sidecar-connection` IPC channel; the Content Security Policy only allows connections to `127.0.0.1`
 - The sidecar rejects foreign browser origins and requires its session token, including for `/health`. The normal development path is Vite plus Electron; opening the frontend in a standalone browser does not grant sidecar access
 
 ---
@@ -106,5 +108,5 @@ We appreciate responsible disclosure and will credit you in the security advisor
 
 ---
 
-*Last updated: 2026-10-27*
+*Last updated: 2026-11-02*
 *← [Contributing](./CONTRIBUTING.md) | [Back to README →](./README.md)*

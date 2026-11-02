@@ -11,7 +11,7 @@ Requirements for running the pre-built MetaLens application and, separately, for
 
 | 📦 Use case | ✅ Requirement |
 |---|---|
-| **Run the compiled app** | Windows 10/11 (64-bit) or a modern Linux distro — nothing else |
+| **Run the compiled app** | Windows 10/11 (64-bit) or a Linux distro with glibc 2.34+ (Ubuntu 22.04+, Debian 12+, Fedora, RHEL 9/10) — nothing else |
 | **Build from source** | Python 3.13, Node.js 22.13+ (24 LTS recommended, used by CI), npm 10+ |
 
 ---
@@ -21,12 +21,14 @@ Requirements for running the pre-built MetaLens application and, separately, for
 ### 🪟 Windows
 - **Minimum:** Windows 10 (64-bit)
 - **Tested on:** Windows 10, Windows 11
-- **Installer:** `MetaLens-vX.Y.Z-Setup-Windows.exe` (Squirrel.Windows)
+- **Installer:** `MetaLens-<version>-win-x64.exe` (Squirrel.Windows)
 - **Status:** ✅ Fully supported
 
 ### 🐧 Linux
-- **Packages:** `.deb` (Debian/Ubuntu), `.rpm` (Fedora/RHEL), `.tar.gz` (any distro)
-- **Status:** ✅ Fully supported
+- **Packages:** `.deb` (Debian/Ubuntu), `.rpm` (Fedora/RHEL), `.tar.gz` (any distro) — one set for all distributions
+- **Minimum C library:** glibc 2.34 — the bundled sidecar is built on RHEL 9. This covers Ubuntu 22.04+, Debian 12+, RHEL 9 / 10 (Rocky, AlmaLinux) and current Fedora
+- **Not supported:** RHEL 8 and older (glibc older than 2.34)
+- **Tested:** installing each package and starting the sidecar (not the full desktop window) was verified in containers on Ubuntu 22.04 / 24.04 / 26.04, Debian 12 / 13, Fedora 43 / 44, Rocky Linux 9 and AlmaLinux 10 (`.tar.gz` on Debian 12, Ubuntu 22.04 and Fedora 44)
 
 ### 🍎 macOS
 - **Status:** ❌ Not currently packaged — no macOS build is produced by CI. Building from source with `npm run make` is possible but unverified.
@@ -49,7 +51,7 @@ Requirements for running the pre-built MetaLens application and, separately, for
 |---|---|
 | **Python** | The sidecar ships as a compiled binary (`metalens-sidecar[.exe]`) inside the installer |
 | **Node.js** | The frontend is pre-built and bundled into the Electron app |
-| **Internet connection** | MetaLens works fully offline — no cloud dependency, no telemetry |
+| **Internet connection** | MetaLens works fully offline — no cloud dependency, no telemetry. A connection is only used for the optional update check |
 | **Admin/root rights** | Windows installer runs per-user (Squirrel); Linux packages install standard desktop entries |
 
 ---
@@ -61,7 +63,7 @@ Only needed if you want to modify MetaLens or package it yourself.
 | 📦 Tool | ✅ Version | 📝 Notes |
 |---|---|---|
 | **Python** | 3.13 | Used to run/package the FastAPI sidecar |
-| **Node.js** | 20+ | Runs Electron and the Vite build |
+| **Node.js** | 22.13+ (24 LTS recommended, used by CI) | Runs Electron Forge and the Vite build (22.13 is the minimum required by Electron Forge 8) |
 | **npm** | 10+ | Installs both `electron/` and `frontend/` dependencies |
 
 See [Installation Guide → Build from Source](./INSTALLATION.md#-build-from-source) for exact steps.
@@ -71,13 +73,13 @@ See [Installation Guide → Build from Source](./INSTALLATION.md#-build-from-sou
 ## 🔒 Data Privacy & Security
 
 > [!IMPORTANT]
-> 🛡️ **Your files never leave your machine.** MetaLens has no network calls of any kind.
+> 🛡️ **Your files never leave your machine.** The only network call MetaLens can make is the update check against GitHub Releases, and only when you ask for it or opt in.
 
 - ✅ **No cloud transmission** — all metadata reads/writes happen locally
 - ✅ **No telemetry** — zero data collection or external tracking
 - ✅ **Localhost-only sidecar** — the Python API binds to `127.0.0.1` only, never `0.0.0.0`
 - ✅ **Open source** — full source code available for audit (MIT license)
-- ✅ **Offline capable** — no internet connection required at any point
+- ✅ **Offline capable** — no internet connection required, except to check for or download a new version
 
 ---
 
@@ -89,5 +91,5 @@ See [Installation Guide → Build from Source](./INSTALLATION.md#-build-from-sou
 
 ---
 
-*Last updated: 2026-10-05*
+*Last updated: 2026-11-02*
 *← [README](../README.md) | [Installation →](./INSTALLATION.md)*

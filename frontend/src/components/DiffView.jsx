@@ -3,6 +3,7 @@ import { GitCompare, Download, ShieldCheck, CheckCircle2, XCircle, Hash } from '
 import { Button } from './ui/Button'
 import { Spinner } from './ui/Spinner'
 import { metalens } from '../api/client'
+import { formatValue, uniqueKeys, valueTitle } from '../lib/formatValue'
 
 const HASH_ALGORITHMS = ['md5', 'sha1', 'sha256', 'sha512', 'blake2b']
 
@@ -152,25 +153,24 @@ export function DiffView({ fileA, fileB }) {
 
         {diff.only_in_a.length > 0 && (
           <Section title="Only in A" color="text-cyber-danger">
-            {diff.only_in_a.map(f => (
-              <DiffRow key={f.key} label={f.label} valueA={String(f.value ?? '')} valueB="—" variant="a" />
+            {withKeys(diff.only_in_a, f => f.key).map(([f, key]) => (
+              <DiffRow key={key} label={f.label} fieldKey={f.key} a={f} variant="a" />
             ))}
           </Section>
         )}
 
         {diff.only_in_b.length > 0 && (
           <Section title="Only in B" color="text-cyber-success">
-            {diff.only_in_b.map(f => (
-              <DiffRow key={f.key} label={f.label} valueA="—" valueB={String(f.value ?? '')} variant="b" />
+            {withKeys(diff.only_in_b, f => f.key).map(([f, key]) => (
+              <DiffRow key={key} label={f.label} fieldKey={f.key} b={f} variant="b" />
             ))}
           </Section>
         )}
 
         {diff.changed.length > 0 && (
           <Section title="Changed" color="text-cyber-warning">
-            {diff.changed.map(({ field_a, field_b }) => (
-              <DiffRow key={field_a.key} label={field_a.label}
-                valueA={String(field_a.value ?? '')} valueB={String(field_b.value ?? '')} variant="changed" />
+            {withKeys(diff.changed, c => c.field_a.key).map(([{ field_a, field_b }, key]) => (
+              <DiffRow key={key} label={field_a.label} fieldKey={field_a.key} a={field_a} b={field_b} variant="changed" />
             ))}
           </Section>
         )}
@@ -193,27 +193,43 @@ function Section({ title, color, children }) {
   )
 }
 
-function DiffRow({ label, valueA, valueB, variant }) {
+function withKeys(items, getKey) {
+  const keys = uniqueKeys(items, getKey)
+  return items.map((item, i) => [item, keys[i]])
+}
+
+function DiffCell({ field, className }) {
+  if (!field) return <div className={`flex-1 min-w-0 font-mono text-[11px] break-all ${className}`}>—</div>
+  return (
+    <div className={`flex-1 min-w-0 font-mono text-[11px] break-all ${className}`} title={valueTitle(field)}>
+      {formatValue(field)}
+    </div>
+  )
+}
+
+function DiffRow({ label, fieldKey, a, b, variant }) {
   const rowBg = variant === 'a' ? 'bg-cyber-danger/5' : variant === 'b' ? 'bg-cyber-success/5' : 'bg-cyber-warning/5'
   const colA = variant === 'a' ? 'text-cyber-danger' : variant === 'changed' ? 'text-cyber-cyan' : 'text-cyber-dim'
   const colB = variant === 'b' ? 'text-cyber-success' : variant === 'changed' ? 'text-cyber-purple' : 'text-cyber-dim'
   return (
     <div className={`flex items-start px-3 py-1 border-b border-cyber-border/30 ${rowBg}`}>
-      <div className="w-36 flex-shrink-0 text-[11px] text-cyber-muted font-mono truncate">{label}</div>
-      <div className={`flex-1 min-w-0 font-mono text-[11px] break-all ${colA}`}>{valueA}</div>
+      <div className="w-36 flex-shrink-0 text-[11px] text-cyber-muted font-mono truncate" title={fieldKey}>{label}</div>
+      <DiffCell field={a} className={colA} />
       <div className="w-4 text-center text-cyber-dim text-[10px]">→</div>
-      <div className={`flex-1 min-w-0 font-mono text-[11px] break-all ${colB}`}>{valueB}</div>
+      <DiffCell field={b} className={colB} />
     </div>
   )
 }
 
 export function makeCsv(diff, nameA, nameB) {
+  // Same text as the table (lists joined with "; "), binary hashes in full.
+  const cell = f => formatValue(f, { full: true })
   const rows = [['Field', nameA, nameB, 'Status']]
-  diff.only_in_a.forEach(f => rows.push([f.label, String(f.value ?? ''), '', 'only_in_a']))
-  diff.only_in_b.forEach(f => rows.push([f.label, '', String(f.value ?? ''), 'only_in_b']))
+  diff.only_in_a.forEach(f => rows.push([f.label, cell(f), '', 'only_in_a']))
+  diff.only_in_b.forEach(f => rows.push([f.label, '', cell(f), 'only_in_b']))
   diff.changed.forEach(({ field_a, field_b }) =>
-    rows.push([field_a.label, String(field_a.value ?? ''), String(field_b.value ?? ''), 'changed']))
-  diff.identical.forEach(f => rows.push([f.label, String(f.value ?? ''), String(f.value ?? ''), 'identical']))
+    rows.push([field_a.label, cell(field_a), cell(field_b), 'changed']))
+  diff.identical.forEach(f => rows.push([f.label, cell(f), cell(f), 'identical']))
 
   return rows.map(r => r.map(cell => {
     const text = String(cell)

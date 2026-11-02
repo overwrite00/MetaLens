@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { File, Image, Music, Film, FileText, FileCode, Archive, Aperture, Sheet, Presentation, AlertCircle } from 'lucide-react'
 import { Spinner } from './ui/Spinner'
 import { metalens } from '../api/client'
@@ -40,7 +40,7 @@ function formatDate(ts) {
   return new Date(ts * 1000).toLocaleString()
 }
 
-export function FilePanel({ currentPath, onSelectFile, onSelectTwo }) {
+export function FilePanel({ currentPath, reloadKey = 0, onSelectFile, onSelectTwo }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -48,20 +48,38 @@ export function FilePanel({ currentPath, onSelectFile, onSelectTwo }) {
   const [sortKey, setSortKey] = useState('name')
   const [sortAsc, setSortAsc] = useState(true)
 
+  const loadedPath = useRef(null)
+
   useEffect(() => {
     let cancelled = false
-    setLoading(Boolean(currentPath))
+    // Same folder reloaded (Refresh): keep the list and selection visible, just update them.
+    const reload = Boolean(currentPath) && loadedPath.current === currentPath
+    loadedPath.current = currentPath
+    setLoading(Boolean(currentPath) && !reload)
     setError(null)
-    setItems([])
-    setSelected(new Set())
+    if (!reload) {
+      setItems([])
+      setSelected(new Set())
+    }
     if (currentPath) {
       metalens.list(currentPath)
-        .then(data => { if (!cancelled) setItems(data.items.filter(i => !i.is_dir)) })
+        .then(data => {
+          if (cancelled) return
+          const files = data.items.filter(i => !i.is_dir)
+          setItems(files)
+          if (reload) {
+            const paths = new Set(files.map(f => f.path))
+            setSelected(prev => {
+              const next = new Set([...prev].filter(p => paths.has(p)))
+              return next.size === prev.size ? prev : next
+            })
+          }
+        })
         .catch(e => { if (!cancelled) setError(e.message) })
         .finally(() => { if (!cancelled) setLoading(false) })
     }
     return () => { cancelled = true }
-  }, [currentPath])
+  }, [currentPath, reloadKey])
 
   function toggleSort(key) {
     if (sortKey === key) setSortAsc(a => !a)

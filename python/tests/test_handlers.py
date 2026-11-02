@@ -104,11 +104,12 @@ def test_mp3_write(sample_mp3):
         tags.save(str(tmp))
         handler = HandlerRegistry.get(tmp)
         from core.models import MetadataField
-        field = MetadataField("tag:TIT2", "Title", "UpdatedTitle", source="id3")
+        # ID3 text frames are multi-valued: the value is always a list (str[]).
+        field = MetadataField("tag:TIT2", "Title", ["UpdatedTitle"], source="id3", multi=True)
         handler.write(tmp, [field])
         record = handler.read(tmp)
         titles = [f.value for f in record.fields if "TIT2" in f.key]
-        assert titles
+        assert titles == [["UpdatedTitle"]]
     finally:
         tmp.unlink(missing_ok=True)
 
@@ -259,7 +260,10 @@ def test_hachoir_unrecognized_format_is_graceful(tmp_path):
     f.write_bytes(bytes([0x13, 0x37]) * 64)
     record = HachoirHandler().read(f)  # must not raise
     assert record.fields == []
-    assert record.read_errors
+    # Unrecognized content is not a read error (hachoir is the primary handler of
+    # unknown files, e.g. .txt): valid record + informative warning instead.
+    assert record.read_errors == []
+    assert record.warnings == ["No format-specific metadata available"]
 
 
 def test_hachoir_is_read_only(sample_wav):
