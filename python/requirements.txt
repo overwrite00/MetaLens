@@ -3,7 +3,7 @@
 # Tests and development tools live in requirements-dev.txt.
 
 # Web server
-fastapi==0.141.1
+fastapi==0.162.0
 uvicorn==0.54.0
 
 # Images
