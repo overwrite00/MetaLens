@@ -7,8 +7,11 @@ import { Button } from './components/ui/Button'
 import { useUndoStack } from './hooks/useUndoStack'
 import { useUpdates } from './hooks/useUpdates'
 import { metalens } from './api/client'
+import { isTextEditable, isUndoShortcut } from './lib/keyboard'
 import { FolderOpen, RotateCcw, GitCompare, Layers, CircleArrowUp } from 'lucide-react'
 import './styles/globals.css'
+
+const baseName = path => (path ? String(path).split(/[\\/]/).pop() : 'the file')
 
 export default function App() {
   const [currentPath, setCurrentPath]   = useState(null)
@@ -26,13 +29,24 @@ export default function App() {
   const [leftW, setLeftW]   = useState(220)
   const [rightW, setRightW] = useState(360)
   const dragging = useRef(null)
+  const undoMsgTimer = useRef(null)
+  const handleUndoRef = useRef(null)
+  handleUndoRef.current = handleUndo
 
   // ── Menu events from Electron ─────────────────────────────────────────────
   useEffect(() => {
     const api = window.electronAPI
     if (!api) return
     const openFolder = () => openFolderDialog()
-    const undo       = () => handleUndo()
+    // `keyboard`: the menu accelerator fired (macOS, where it cannot be left to the
+    // page). Inside a text field that is the field's own undo, not the file undo (D11).
+    const undo       = payload => {
+      if (payload?.keyboard && isTextEditable(document.activeElement)) {
+        document.execCommand?.('undo')
+        return
+      }
+      handleUndoRef.current()
+    }
     const about      = () => setShowAbout(true)
     api.onMenuOpenFolder(openFolder)
     api.onMenuUndo(undo)
@@ -42,7 +56,21 @@ export default function App() {
       api.removeAllListeners('menu-undo')
       api.removeAllListeners('menu-about')
     }
-  }, [selectedFile, undo, canUndo])
+  }, [])
+
+  // Ctrl+Z (Windows/Linux: the menu shows it but leaves it to the page). In a text
+  // field the event is left alone so the browser undoes the typing; elsewhere it
+  // undoes the last save.
+  useEffect(() => {
+    function onKeyDown(event) {
+      if (!isUndoShortcut(event) || event.defaultPrevented || event.repeat) return
+      if (isTextEditable(event.target)) return
+      event.preventDefault()
+      handleUndoRef.current()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   useEffect(() => {
     const unsubscribe = window.electronAPI?.onMenuCheckUpdates?.(() => {
@@ -59,17 +87,39 @@ export default function App() {
   }
 
   // ── Undo ──────────────────────────────────────────────────────────────────
+  function showUndoMsg(message, ms) {
+    clearTimeout(undoMsgTimer.current)
+    setUndoMsg(message)
+    undoMsgTimer.current = setTimeout(() => setUndoMsg(null), ms)
+  }
+  useEffect(() => () => clearTimeout(undoMsgTimer.current), [])
+
+  const refreshViews = () => {
+    // Refresh the record and the file list even if the selection changed meanwhile.
+    setReloadKey(value => value + 1)
+    setFilesReloadKey(value => value + 1)
+  }
+
   async function handleUndo() {
     try {
-      const entry = await undo(entry => metalens.write(entry.filePath, entry.fields))
+      let result = null
+      const entry = await undo(async item => { result = await metalens.undo(item.token) })
       if (!entry) return
-      setUndoMsg('Undo applied')
-      setTimeout(() => setUndoMsg(null), 2000)
-      // Refresh the current view even if selection changed while undo was queued.
-      setReloadKey(value => value + 1)
+      // Non-blocking server warnings (e.g. the file owner could not be restored) stay visible longer.
+      const warnings = Array.isArray(result?.warnings) ? result.warnings.filter(Boolean) : []
+      showUndoMsg(`Undone: ${entry.label || 'last save'} (${baseName(entry.filePath)})${warnings.length ? ` — ${warnings.join('; ')}` : ''}`,
+        warnings.length ? 6000 : 2500)
+      refreshViews()
     } catch (e) {
-      setUndoMsg(`Undo failed: ${e.message}`)
-      setTimeout(() => setUndoMsg(null), 3000)
+      const name = baseName(e.undoEntry?.filePath)
+      if (e.undoDiscarded === 'changed') {
+        showUndoMsg(`Undo not possible: ${name} changed since the save (entry removed)`, 6000)
+        refreshViews()
+      } else if (e.undoDiscarded === 'expired') {
+        showUndoMsg(`Undo no longer available for ${name} (entry removed)`, 6000)
+      } else {
+        showUndoMsg(`Undo failed: ${e.message}`, 4000)
+      }
     }
   }
 
@@ -121,7 +171,7 @@ export default function App() {
             <FolderOpen size={12} /> Open Folder
           </Button>
           <Button variant="ghost" size="xs" onClick={handleUndo}
-            disabled={!canUndo() || busy} title="Undo last write">
+            disabled={!canUndo() || busy} title="Undo last save (Ctrl+Z)">
             <RotateCcw size={12} /> Undo
           </Button>
           {fileB && (

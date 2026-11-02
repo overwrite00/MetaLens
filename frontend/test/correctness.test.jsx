@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
-import { StrictMode, useState } from 'react'
+import { StrictMode, useEffect, useState } from 'react'
 import { MetadataEditor } from '../src/components/MetadataEditor'
 import { DetailPanel } from '../src/components/DetailPanel'
 import { FilePanel } from '../src/components/FilePanel'
@@ -8,21 +8,23 @@ import { DiffView, makeCsv, exportCsv } from '../src/components/DiffView'
 import { FolderPanel } from '../src/components/FolderPanel'
 import { useUndoStack } from '../src/hooks/useUndoStack'
 import { metalens } from '../src/api/client'
+import { apiError, connectFakeSidecar, createFakeSidecar } from './fake-sidecar'
 
-vi.mock('../src/api/client', () => ({ metalens: { write: vi.fn(), delete: vi.fn(), read: vi.fn(), list: vi.fn(), hash: vi.fn(), diff: vi.fn() } }))
+vi.mock('../src/api/client', () => ({ metalens: { write: vi.fn(), delete: vi.fn(), undo: vi.fn(), read: vi.fn(), list: vi.fn(), hash: vi.fn(), diff: vi.fn() } }))
 const field = (value = 'original') => ({ key: 'pdf:Title', label: 'Title', value, editable: true, deletable: true })
 const record = (value = 'original') => ({ supports_write: true, fields: [field(value)] })
 function deferred() { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b }); return { promise, resolve, reject } }
-beforeEach(() => { vi.resetAllMocks(); metalens.write.mockResolvedValue({}); metalens.delete.mockResolvedValue({}) })
+beforeEach(() => { vi.resetAllMocks(); metalens.write.mockResolvedValue({ ok: true, errors: [], undo_token: null }); metalens.delete.mockResolvedValue({ ok: true, errors: [], undo_token: null }) })
 
-test('undo captures originals only after a successful write', async () => {
+test('the undo entry comes from the server token, pushed only after a successful save', async () => {
   const push = vi.fn(); const write = deferred(); metalens.write.mockReturnValue(write.promise)
   render(<MetadataEditor record={record()} filePath="a.pdf" onSaved={vi.fn()} onUndoPush={push} />)
   fireEvent.change(screen.getByRole('textbox'), { target: { value: 'edited' } })
   fireEvent.click(screen.getByText('Save'))
   expect(push).not.toHaveBeenCalled()
-  await act(async () => write.resolve({}))
-  expect(push).toHaveBeenCalledWith({ filePath: 'a.pdf', fields: [field()] })
+  await act(async () => write.resolve({ ok: true, errors: [], undo_token: 'tok-1' }))
+  expect(push).toHaveBeenCalledExactlyOnceWith({ filePath: 'a.pdf', token: 'tok-1', label: 'Edit Title' })
+  expect(metalens.write).toHaveBeenCalledExactlyOnceWith('a.pdf', [{ key: 'pdf:Title', value: 'edited' }], [])
 })
 
 test('failed writes create no undo entry', async () => {
@@ -32,27 +34,42 @@ test('failed writes create no undo entry', async () => {
   await screen.findByText('write failed'); expect(push).not.toHaveBeenCalled()
 })
 
-test('a failed delete preserves undo of successful edits and allows retry', async () => {
+test('a no-op save (null token) refreshes but creates no undo entry', async () => {
+  const push = vi.fn(), saved = vi.fn(); metalens.write.mockResolvedValue({ ok: true, errors: [], undo_token: null })
+  render(<MetadataEditor record={record()} filePath="a.pdf" onSaved={saved} onUndoPush={push} />)
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'typo' } })
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'original' } }); fireEvent.click(screen.getByText('Save'))
+  await screen.findByText('Saved ✓')
+  expect(metalens.write).toHaveBeenCalledExactlyOnceWith('a.pdf', [{ key: 'pdf:Title', value: 'original' }], [])
+  expect(saved).toHaveBeenCalledTimes(1); expect(push).not.toHaveBeenCalled()
+})
+
+test('edits and deletions are one atomic write with one undo entry; a failed save is retried whole', async () => {
   const push = vi.fn()
   const author = { ...field('author'), key: 'pdf:Author', label: 'Author' }
-  metalens.delete.mockRejectedValueOnce(new Error('delete failed')).mockResolvedValueOnce({})
+  metalens.write.mockRejectedValueOnce(new Error('save failed')).mockResolvedValueOnce({ ok: true, errors: [], undo_token: 'tok-9' })
   render(<MetadataEditor record={{ supports_write: true, fields: [field(), author] }} filePath="a.pdf" onSaved={vi.fn()} onUndoPush={push} />)
   fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'edited' } })
   fireEvent.click(screen.getByRole('button', { name: 'Delete Author' })); fireEvent.click(screen.getByText('Save'))
-  await screen.findByText('delete failed')
-  expect(push).toHaveBeenCalledWith({ filePath: 'a.pdf', fields: [field()] })
+  await screen.findByText('save failed')
+  expect(push).not.toHaveBeenCalled()   // nothing was saved: no partial undo entry
   fireEvent.click(screen.getByText('Save'))
   await screen.findByText('Saved ✓')
-  expect(metalens.write).toHaveBeenCalledTimes(1)
-  expect(push).toHaveBeenLastCalledWith({ filePath: 'a.pdf', fields: [author] })
+  const call = ['a.pdf', [{ key: 'pdf:Title', value: 'edited' }], ['pdf:Author']]
+  expect(metalens.write.mock.calls).toEqual([call, call])
+  expect(metalens.delete).not.toHaveBeenCalled()
+  expect(push).toHaveBeenCalledExactlyOnceWith({ filePath: 'a.pdf', token: 'tok-9', label: 'Edit Title; Delete Author' })
 })
 
 test('a changed then deleted field is deleted once without an intermediate write', async () => {
-  const push = vi.fn(); render(<MetadataEditor record={record()} filePath="a.pdf" onSaved={vi.fn()} onUndoPush={push} />)
+  const push = vi.fn(); metalens.write.mockResolvedValue({ ok: true, errors: [], undo_token: 'tok-1' })
+  render(<MetadataEditor record={record()} filePath="a.pdf" onSaved={vi.fn()} onUndoPush={push} />)
   fireEvent.change(screen.getByRole('textbox'), { target: { value: 'edited' } })
   fireEvent.click(screen.getByRole('button', { name: 'Delete Title' })); fireEvent.click(screen.getByText('Save'))
   await waitFor(() => expect(push).toHaveBeenCalled())
-  expect(metalens.write).not.toHaveBeenCalled(); expect(metalens.delete).toHaveBeenCalledWith('a.pdf', ['pdf:Title'])
+  expect(metalens.write).toHaveBeenCalledExactlyOnceWith('a.pdf', [], ['pdf:Title'])
+  expect(metalens.delete).not.toHaveBeenCalled()
+  expect(push).toHaveBeenCalledWith({ filePath: 'a.pdf', token: 'tok-1', label: 'Delete Title' })
 })
 
 test('repeated save click submits a single write and ignores completion after a file switch', async () => {
@@ -61,9 +78,10 @@ test('repeated save click submits a single write and ignores completion after a 
   fireEvent.change(screen.getByRole('textbox'), { target: { value: 'edited' } })
   fireEvent.click(screen.getByText('Save')); fireEvent.click(screen.getByText('Saving…'))
   view.rerender(<MetadataEditor record={record('second')} filePath="b.pdf" onSaved={saved} onUndoPush={push} />)
-  await act(async () => write.resolve({}))
+  await act(async () => write.resolve({ ok: true, errors: [], undo_token: 'tok-1' }))
   expect(metalens.write).toHaveBeenCalledTimes(1); expect(saved).not.toHaveBeenCalled()
-  expect(push).toHaveBeenCalledWith({ filePath: 'a.pdf', fields: [field()] })
+  // The save did happen on a.pdf: its undo entry still belongs to a.pdf.
+  expect(push).toHaveBeenCalledExactlyOnceWith({ filePath: 'a.pdf', token: 'tok-1', label: 'Edit Title' })
 })
 
 test('mutation queue orders a pending save before undo and recovers after failure', async () => {
@@ -110,50 +128,134 @@ test('CSV escapes quotes and line breaks and revokes the download URL', async ()
   click.mockRestore(); vi.unstubAllGlobals()
 })
 
-test('deleted fields are included in undo', async () => {
-  const push = vi.fn(); render(<MetadataEditor record={record()} filePath="a.pdf" onSaved={vi.fn()} onUndoPush={push} />)
-  fireEvent.click(screen.getByRole('button', { name: 'Delete Title' })); fireEvent.click(screen.getByText('Save'))
-  await waitFor(() => expect(push).toHaveBeenCalledWith({ filePath: 'a.pdf', fields: [field()] }))
+function UndoHarness() {
+  const [data, setData] = useState(null)
+  const stack = useUndoStack()
+  const reload = async () => setData(await metalens.read('a.pdf'))
+  useEffect(() => { reload() }, [])
+  return <>
+    <MetadataEditor record={data} filePath="a.pdf" onSaved={reload} onUndoPush={stack.push} runExclusive={stack.runExclusive} mutationBusy={stack.busy} />
+    <button disabled={!stack.canUndo() || stack.busy} onClick={async () => {
+      try { await stack.undo(entry => metalens.undo(entry.token)) } catch { /* App shows the reason */ }
+      await reload()
+    }}>Restore</button>
+  </>
+}
+
+test('deleted fields are restored by the token undo', async () => {
+  const server = connectFakeSidecar(metalens, createFakeSidecar({ fields: [field()] }))
+  render(<UndoHarness />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete Title' })); fireEvent.click(screen.getByText('Save'))
+  await screen.findByText('No editable fields')
+  expect(server.values.has('pdf:Title')).toBe(false)
+  await waitFor(() => expect(screen.getByText('Restore').disabled).toBe(false))
+  fireEvent.click(screen.getByText('Restore'))
+  await waitFor(() => expect(screen.getByRole('textbox').value).toBe('original'))
+  expect(metalens.undo).toHaveBeenCalledExactlyOnceWith('tok-1')
+  expect(server.values.get('pdf:Title')).toBe('original'); expect(server.journal.size).toBe(0)
 })
 
-test('edit and delete each round-trip through undo and record reload', async () => {
-  let stored = field()
-  metalens.read.mockImplementation(async () => ({ supports_write: true, fields: stored ? [{ ...stored }] : [] }))
-  metalens.write.mockImplementation(async (_path, fields) => { stored = { ...fields[0] }; return {} })
-  metalens.delete.mockImplementation(async () => { stored = null; return {} })
-  function Harness() {
-    const [data, setData] = useState(record())
-    const stack = useUndoStack()
-    const reload = async () => setData(await metalens.read('a.pdf'))
-    return <>
-      <MetadataEditor record={data} filePath="a.pdf" onSaved={reload} onUndoPush={stack.push} runExclusive={stack.runExclusive} mutationBusy={stack.busy} />
-      <button disabled={!stack.canUndo() || stack.busy} onClick={async () => { await stack.undo(entry => metalens.write(entry.filePath, entry.fields)); await reload() }}>Restore</button>
-    </>
-  }
-  render(<Harness />)
-  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'changed' } }); fireEvent.click(screen.getByText('Save'))
+test('edit and delete each round-trip through the token undo and record reload', async () => {
+  const server = connectFakeSidecar(metalens, createFakeSidecar({ fields: [field()] }))
+  render(<UndoHarness />)
+  fireEvent.change(await screen.findByRole('textbox'), { target: { value: 'changed' } }); fireEvent.click(screen.getByText('Save'))
   await waitFor(() => expect(screen.getByRole('textbox').value).toBe('changed'))
+  expect(server.values.get('pdf:Title')).toBe('changed')
+  await waitFor(() => expect(screen.getByText('Restore').disabled).toBe(false))
   fireEvent.click(screen.getByText('Restore'))
   await waitFor(() => expect(screen.getByRole('textbox').value).toBe('original'))
+  // The server schema survives the round-trip: still editable and deletable.
   fireEvent.click(screen.getByRole('button', { name: 'Delete Title' })); fireEvent.click(screen.getByText('Save'))
   await screen.findByText('No editable fields')
-  expect(stored).toBeNull()
+  expect(server.values.has('pdf:Title')).toBe(false)
+  await waitFor(() => expect(screen.getByText('Restore').disabled).toBe(false))
   fireEvent.click(screen.getByText('Restore'))
   await waitFor(() => expect(screen.getByRole('textbox').value).toBe('original'))
-  expect(metalens.write).toHaveBeenCalledTimes(3)
-  expect(stored).toEqual(field())
+  expect(metalens.write.mock.calls).toEqual([
+    ['a.pdf', [{ key: 'pdf:Title', value: 'changed' }], []],
+    ['a.pdf', [], ['pdf:Title']],
+  ])
+  expect(metalens.undo.mock.calls).toEqual([['tok-1'], ['tok-2']])
+  expect(server.values.get('pdf:Title')).toBe('original'); expect(server.journal.size).toBe(0)
+  expect(screen.getByText('Restore').disabled).toBe(true)
+})
+
+test('an added field is removed again by undo', async () => {
+  const subject = { key: 'pdf:Subject', label: 'Subject', value: null, editable: true, deletable: true, field_type: 'str' }
+  const server = connectFakeSidecar(metalens, createFakeSidecar({ fields: [field()], addable: [subject] }))
+  render(<UndoHarness />)
+  fireEvent.change(await screen.findByLabelText('Field to add'), { target: { value: 'pdf:Subject' } })
+  fireEvent.change(screen.getByLabelText('New Subject'), { target: { value: 'topic' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Add field' })); fireEvent.click(screen.getByText('Save'))
+  await waitFor(() => expect(server.values.get('pdf:Subject')).toBe('topic'))
+  expect(metalens.write).toHaveBeenCalledExactlyOnceWith('a.pdf', [{ key: 'pdf:Subject', value: 'topic' }], [])
+  await waitFor(() => expect(screen.getByText('Restore').disabled).toBe(false))
+  fireEvent.click(screen.getByText('Restore'))
+  await waitFor(() => expect(server.values.has('pdf:Subject')).toBe(false))
+  await waitFor(() => expect(screen.getAllByRole('textbox')).toHaveLength(1))
+  expect(metalens.undo).toHaveBeenCalledExactlyOnceWith('tok-1')
+  expect(server.values.get('pdf:Title')).toBe('original')
 })
 
 test('undo state reacts, retries failed undo, and serializes two requests', async () => {
   let stack
   function Harness() { stack = useUndoStack(); return <span>{stack.canUndo() ? 'available' : 'empty'}</span> }
   render(<Harness />)
-  act(() => stack.push({ filePath: 'a', fields: [] })); expect(screen.getByText('available')).toBeTruthy()
+  act(() => stack.push({ filePath: 'a', token: 't', label: 'x' })); expect(screen.getByText('available')).toBeTruthy()
   const restore = vi.fn().mockRejectedValueOnce(new Error('retry')).mockResolvedValueOnce({})
   await act(async () => { await expect(stack.undo(restore)).rejects.toThrow('retry') })
   expect(screen.getByText('available')).toBeTruthy()
   await act(async () => { await Promise.all([stack.undo(restore), stack.undo(restore)]) })
   expect(restore).toHaveBeenCalledTimes(2); expect(screen.getByText('empty')).toBeTruthy()
+})
+
+test.each([
+  [409, 'concurrent_modification', 'changed'],
+  [410, 'undo_expired', 'expired'],
+])('a %i undo removes only that entry, tags the reason and does not move on by itself', async (status, code, reason) => {
+  let stack
+  function Harness() { stack = useUndoStack(); return null }
+  render(<Harness />)
+  act(() => { stack.push({ filePath: 'a', token: 'old' }); stack.push({ filePath: 'a', token: 'new' }) })
+  const restore = vi.fn().mockRejectedValueOnce(apiError(status, code, 'refused')).mockResolvedValueOnce({})
+  let failure
+  await act(async () => { failure = await stack.undo(restore).catch(e => e) })
+  expect(failure.undoDiscarded).toBe(reason); expect(failure.undoEntry.token).toBe('new')
+  expect(restore).toHaveBeenCalledTimes(1); expect(stack.canUndo()).toBe(true)
+  let done
+  await act(async () => { done = await stack.undo(restore) })
+  expect(done.token).toBe('old')
+  expect(restore.mock.calls.map(([entry]) => entry.token)).toEqual(['new', 'old'])
+  expect(stack.canUndo()).toBe(false)
+})
+
+test.each([
+  [403, 'access_denied'], [500, 'internal_error'], [422, 'lossy_write'], [undefined, undefined],
+])('a %s undo error keeps the entry on top', async (status, code) => {
+  let stack
+  function Harness() { stack = useUndoStack(); return null }
+  render(<Harness />)
+  act(() => { stack.push({ filePath: 'a', token: 'old' }); stack.push({ filePath: 'a', token: 'new' }) })
+  const error = status ? apiError(status, code, 'failed') : new TypeError('Failed to fetch')
+  const restore = vi.fn().mockRejectedValueOnce(error).mockResolvedValue({})
+  let failure
+  await act(async () => { failure = await stack.undo(restore).catch(x => x) })
+  expect(failure).toBe(error); expect(failure.undoDiscarded).toBeUndefined()
+  await act(async () => { await stack.undo(restore) })
+  expect(restore.mock.calls.map(([entry]) => entry.token)).toEqual(['new', 'new'])
+  expect(stack.canUndo()).toBe(true)
+})
+
+test('undo against the fake sidecar: external change is 409 and keeps the server entry, used token is 410', async () => {
+  const server = createFakeSidecar({ fields: [field()] })
+  const { undo_token } = await server.write('a.pdf', [{ key: 'pdf:Title', value: 'mine' }], [])
+  server.externalEdit('pdf:Title', 'theirs')
+  await expect(server.undo(undo_token)).rejects.toMatchObject({ status: 409, code: 'concurrent_modification' })
+  expect(server.journal.has(undo_token)).toBe(true)
+  server.externalEdit('pdf:Title', 'mine')
+  await expect(server.undo(undo_token)).resolves.toMatchObject({ ok: true, keys: ['pdf:Title'], undo_token: null })
+  await expect(server.undo(undo_token)).rejects.toMatchObject({ status: 410, code: 'undo_expired' })
+  expect(await server.write('a.pdf', [{ key: 'pdf:Title', value: 'original' }], [])).toEqual({ ok: true, errors: [], undo_token: null })
 })
 
 test('a late read cannot overwrite a newly selected file', async () => {

@@ -14,7 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from config import settings
-from api.routes import router
+from api.routes import ApiCode, error_response, install_error_handlers, router
+from core.errors import error_entry
 
 app = FastAPI(
     title=settings.app_name,
@@ -37,19 +38,26 @@ app.add_middleware(
 async def authenticate(request: Request, call_next):
     origin = request.headers.get("origin")
     if origin is not None and origin not in _ALLOWED_ORIGINS:
-        return JSONResponse({"detail": "Origin not allowed"}, status_code=403)
+        return _auth_error(403, ApiCode.ORIGIN_NOT_ALLOWED, "Origin not allowed")
     token = app.state.sidecar_token
     if not token:
-        return JSONResponse({"detail": "Sidecar authentication is not configured"}, status_code=503)
+        return _auth_error(503, ApiCode.AUTH_NOT_CONFIGURED, "Sidecar authentication is not configured")
     # CORS preflights carry no credentials and never execute an API operation.
     if request.method == "OPTIONS" and "access-control-request-method" in request.headers:
         return await call_next(request)
     supplied = request.headers.get("authorization", "")
     expected = f"Bearer {token}"
     if not secrets.compare_digest(supplied.encode("utf-8"), expected.encode("utf-8")):
-        return JSONResponse({"detail": "Invalid sidecar credentials"}, status_code=401)
+        return _auth_error(401, ApiCode.UNAUTHORIZED, "Invalid sidecar credentials")
     return await call_next(request)
 
+
+def _auth_error(status: int, code: str, message: str) -> JSONResponse:
+    """Authentication failures use the same uniform error body as the API."""
+    return error_response(status, [error_entry(code, None, message)])
+
+
+install_error_handlers(app)
 app.include_router(router)
 
 

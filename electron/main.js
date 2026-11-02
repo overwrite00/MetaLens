@@ -9,6 +9,7 @@ const { isTrustedFrame, secureWindow } = require('./security-policy')
 const { waitForSidecar } = require('./sidecar-health')
 const { handleSquirrelEvent } = require('./squirrel-events')
 const { spawnTree, killProcessTree } = require('./process-tree')
+const { buildMenuTemplate } = require('./menu')
 const {
   REPO_URL, checkForUpdates, downloadAsset, cleanupStaleDownloads, createSettingsStore,
 } = require('./update-check')
@@ -241,47 +242,9 @@ function setupIPC() {
 // ─────────────────────── Menu ─────────────────────────────────────────────────
 
 function buildMenu() {
-  const template = [
-    {
-      label: 'File',
-      submenu: [
-        { label: 'Open Folder…', accelerator: 'CmdOrCtrl+O',
-          click: () => mainWindow.webContents.send('menu-open-folder') },
-        { type: 'separator' },
-        { role: 'quit' },
-      ],
-    },
-    {
-      label: 'Edit',
-      submenu: [
-        { label: 'Undo', accelerator: 'CmdOrCtrl+Z',
-          click: () => mainWindow.webContents.send('menu-undo') },
-        { type: 'separator' },
-        { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' },
-      ],
-    },
-    {
-      label: 'View',
-      submenu: [
-        { role: 'reload' }, { role: 'toggleDevTools' },
-        { type: 'separator' },
-        { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' },
-        { type: 'separator' },
-        { role: 'togglefullscreen' },
-      ],
-    },
-    {
-      label: 'Help',
-      submenu: [
-        { label: 'Check for Updates…',
-          click: () => mainWindow.webContents.send('menu-check-updates') },
-        { type: 'separator' },
-        { label: 'About MetaLens',
-          click: () => mainWindow.webContents.send('menu-about') },
-      ],
-    },
-  ]
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+  // Menu clicks reach the renderer as fixed IPC events; see menu.js for Ctrl+Z (D11).
+  const send = (channel, ...args) => mainWindow?.webContents.send(channel, ...args)
+  Menu.setApplicationMenu(Menu.buildFromTemplate(buildMenuTemplate(send)))
 }
 
 // ─────────────────────── Window ──────────────────────────────────────────────

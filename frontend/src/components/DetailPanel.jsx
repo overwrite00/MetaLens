@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Eye, Pencil, GitCompare, AlertTriangle, ShieldCheck, Copy, Check, Hash } from 'lucide-react'
 import { Spinner } from './ui/Spinner'
 import { MetadataTable } from './MetadataTable'
+import { RecordNotices } from './RecordNotices'
 import { MetadataEditor } from './MetadataEditor'
 import { DiffView } from './DiffView'
 import { metalens } from '../api/client'
@@ -151,9 +152,9 @@ export function DetailPanel({ filePath, filePathB, onUndoPush, runExclusive, mut
             <div className="text-[10px] text-cyber-dim font-mono mt-0.5">
               {record.handler_name} · {record.fields?.length ?? 0} fields
               {record.read_errors?.length > 0 &&
-                <span className="text-cyber-warning ml-2">
+                <span className="text-cyber-danger ml-2">
                   <AlertTriangle size={9} className="inline mr-0.5" />
-                  {record.read_errors.length} warning{record.read_errors.length > 1 ? 's' : ''}
+                  {record.read_errors.length} read error{record.read_errors.length > 1 ? 's' : ''}
                 </span>
               }
             </div>
@@ -191,6 +192,7 @@ export function DetailPanel({ filePath, filePathB, onUndoPush, runExclusive, mut
         )}
         {!loading && !error && filePath && tab === 'view' && (
           <div className="flex flex-col h-full overflow-y-auto">
+            <RecordNotices record={record} />
             <MetadataTable fields={record?.fields ?? []} />
             <HashSection key={filePath} filePath={filePath} />
           </div>

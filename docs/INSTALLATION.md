@@ -20,7 +20,7 @@ Step-by-step instructions for installing MetaLens on Windows and Linux, plus bui
 ## 🪟 Windows Installation
 
 1. Go to the [Releases](../../../releases) page
-2. Download **`MetaLens-vX.Y.Z-Setup-Windows.exe`** (latest version)
+2. Download **`MetaLens-X.Y.Z-win-x64.exe`** (latest version; betas are named `MetaLens-X.Y.Z-beta.N-win-x64.exe`)
 3. Double-click the downloaded file
 
 > [!WARNING]
@@ -93,7 +93,7 @@ cd python
 python -m venv .venv
 source .venv/bin/activate        # Linux
 # .venv\Scripts\activate         # Windows
-pip install -r requirements.txt
+pip install -r requirements.txt        # runtime only; requirements-dev.txt adds the test dependencies
 
 # 3. Install Node dependencies
 cd ../electron && npm install
@@ -162,5 +162,5 @@ sudo apt --fix-broken install   # Debian/Ubuntu, after a failed .deb install
 
 ---
 
-*Last updated: 2026-10-31*
+*Last updated: 2026-11-02*
 *← [Requirements](./REQUIREMENTS.md) | [Usage →](./USAGE.md)*

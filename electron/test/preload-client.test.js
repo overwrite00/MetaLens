@@ -43,7 +43,7 @@ test('frontend fails closed without Electron and sends session token in header o
     assert.equal(target, 'http://127.0.0.1:12345/health')
     assert.equal(options.headers.Authorization, 'Bearer session-secret')
     assert.equal(target.includes('secret'), false)
-    return { ok: true, json: async () => ({ status: 'ok' }) }
+    return { ok: true, json: async () => ({ status: 'ok' }), text: async () => JSON.stringify({ status: 'ok' }) }
   }
   const authenticated = await import(`${url}?authenticated`)
   assert.deepEqual(await authenticated.metalens.health(), { status: 'ok' })

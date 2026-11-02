@@ -63,7 +63,7 @@ Only needed if you want to modify MetaLens or package it yourself.
 | 📦 Tool | ✅ Version | 📝 Notes |
 |---|---|---|
 | **Python** | 3.13 | Used to run/package the FastAPI sidecar |
-| **Node.js** | 20+ | Runs Electron and the Vite build |
+| **Node.js** | 22.13+ (24 LTS recommended, used by CI) | Runs Electron Forge and the Vite build (22.13 is the minimum required by Electron Forge 8) |
 | **npm** | 10+ | Installs both `electron/` and `frontend/` dependencies |
 
 See [Installation Guide → Build from Source](./INSTALLATION.md#-build-from-source) for exact steps.
@@ -91,5 +91,5 @@ See [Installation Guide → Build from Source](./INSTALLATION.md#-build-from-sou
 
 ---
 
-*Last updated: 2026-10-31*
+*Last updated: 2026-11-02*
 *← [README](../README.md) | [Installation →](./INSTALLATION.md)*
