@@ -334,7 +334,7 @@ def jpeg_no_exif(tmp_path: Path) -> Path:
     return path
 
 
-@sample("jpeg_canon_makernote", volatile=_JPEG_VOLATILE, mutations=_DATE_MUTATIONS)
+@sample("jpeg_canon_makernote", volatile=(*_JPEG_VOLATILE, "maker:*"), mutations=_DATE_MUTATIONS)
 def jpeg_canon_makernote(tmp_path: Path) -> Path:
     """Camera JPEG whose MakerNote holds ABSOLUTE offsets (Canon style); Make is
     stored NUL-padded, thumbnail in IFD1."""
@@ -343,7 +343,7 @@ def jpeg_canon_makernote(tmp_path: Path) -> Path:
     return path
 
 
-@sample("jpeg_nikon_makernote", volatile=_JPEG_VOLATILE, mutations=_DATE_MUTATIONS)
+@sample("jpeg_nikon_makernote", volatile=(*_JPEG_VOLATILE, "maker:*"), mutations=_DATE_MUTATIONS)
 def jpeg_nikon_makernote(tmp_path: Path) -> Path:
     """Camera JPEG whose MakerNote has its own TIFF header (Nikon type 3, relative offsets)."""
     path = tmp_path / "nikon.jpg"

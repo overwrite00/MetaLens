@@ -26,6 +26,7 @@ browser fallback is disabled.
 ## 📚 Table of Contents
 
 1. [GET /health](#get-health)
+2. [GET /aliases](#get-aliases)
 2. [GET /list](#get-list)
 3. [GET /read](#get-read)
 4. [POST /write](#post-write)
@@ -48,6 +49,17 @@ Health check + version, used by Electron to know the sidecar is ready (it checks
 **Response**
 ```json
 { "status": "ok", "version": "0.4.0", "app": "MetaLens" }
+```
+
+---
+
+## GET `/aliases`
+
+Other names under which common fields are known (`"date taken"` for `exif:DateTimeOriginal`…), used by the search box.
+
+**Response**
+```json
+{ "aliases": { "exif:DateTimeOriginal": ["date taken", "capture date", "shot date", "create date"] } }
 ```
 
 ---
@@ -419,11 +431,12 @@ persisted anywhere (the Undo journal is in memory), so they may change between v
 | `img:` | image (all) | `format`, `mode`, `width`, `height`, `dpi` (`[x, y]`, from JFIF/EXIF/Pillow); PNG also `bit_depth`, `color_type`, `interlace` | no (computed) |
 | `exif:` | JPEG, PNG `eXIf`, WebP `EXIF` (editable); TIFF, TIFF-based RAW (entries can be changed, added or deleted; nothing existing is moved) (e.g. CR2, NEF, ARW, DNG, ORF, RW2), PNG `eXIf`, WebP `EXIF` | tag name (`exif:Artist`, `exif:DateTimeOriginal`); a tag outside its usual IFD is `exif:<IFD0\|Exif\|Interop\|IFD1>:<Name>`; unnamed tags `exif:tag_<id>` | JPEG only; image-structure tags, pointers, the thumbnail and `UNDEFINED` binaries (e.g. `MakerNote`) are read-only, binaries deletable |
 | `gps:` | as `exif:` (GPS IFD) | tag name without the `GPS` prefix (`gps:Latitude`, `gps:LatitudeRef`) | JPEG only |
-| `xmp:` | JPEG (APP1 XMP), WebP `XMP `, PNG (`XML:com.adobe.xmp` iTXt), TIFF/DNG (tag 700), MP4/MOV (XMP `uuid`) | `xmp:<prefix>:<local>` with canonical prefixes (`xmp:dc:title`, `xmp:dc:subject`, `xmp:xmp:Rating`, `xmp:photoshop:City`, `xmp:Iptc4xmpCore:Location`…) | JPEG, PNG and WebP, for simple values, language alternatives (`x-default`) and Bag/Seq of simple items; structs and qualifiers are not shown individually: `xmp:@hidden` lists them (computed, removable as a whole); extended XMP is read-only |
+| `xmp:` | JPEG (APP1 XMP), WebP `XMP `, PNG (`XML:com.adobe.xmp` iTXt), TIFF/DNG (tag 700), MP4/MOV (XMP `uuid`) | `xmp:<prefix>:<local>` with canonical prefixes (`xmp:dc:title`, `xmp:dc:subject`, `xmp:xmp:Rating`, `xmp:photoshop:City`, `xmp:Iptc4xmpCore:Location`…) | JPEG, PNG and WebP, for simple values, language alternatives (`x-default`; the other languages are listed read only as `<key>@<language>`, e.g. `xmp:dc:title@de`) and Bag/Seq of simple items; structs and qualifiers are not shown individually: `xmp:@hidden` lists them (computed, removable as a whole); extended XMP is read-only |
 | `iptc:` | JPEG (APP13 `Photoshop 3.0`, resource 0x0404), TIFF/DNG (tag 33723, read-only) | mapped IIM name (`iptc:Keywords`, `iptc:By-line`, `iptc:Caption-Abstract`…) or `iptc:<record>:<dataset>` | JPEG only; repeatable datasets are lists; written as UTF-8 (`1:90 = ESC % G`); a legacy (non-UTF-8) charset makes IPTC read-only; an edit or delete of a dataset is mirrored to its XMP twin (and vice versa) when the twin is already in the file: Keywords↔`dc:subject`, By-line↔`dc:creator`, ObjectName↔`dc:title`, Caption-Abstract↔`dc:description`, CopyrightNotice↔`dc:rights`, Headline, City, Province-State, Country, Credit, Source, SpecialInstructions, TransmissionReference, Sub-location, Country code ↔ the matching `photoshop:`/`Iptc4xmpCore:` property. The mirror is part of the same transaction and Undo, never creates a twin, never overrides a key sent in the same request, and a value the twin cannot store is skipped with a `warnings` note |
 | `heif:` | HEIC / HEIF / AVIF (`.heic .heif .hif .avif`; EXIF, XMP and ICC are also served as `exif:`, `gps:`, `xmp:`, `icc:`) | `MajorBrand`, `CompatibleBrands`, `Rotation` | no (read-only; the EXIF / GPS / XMP fields of these files can be deleted in place) |
 | `jfif:` | JPEG (APP0 JFIF) | `Version`, `ResolutionUnit`, `XResolution`, `YResolution` | no |
 | `jpeg:` | JPEG | `Comment` (COM segments; a list when there are several) | no |
+| `maker:` | JPEG/TIFF/RAW EXIF with a Canon, Nikon or Sony camera note | `maker:<vendor>:<Name>` (`maker:canon:OwnerName`, `maker:nikon:SerialNumber`…) | no (computed; removing `exif:MakerNote` removes them) |
 | `mpf:` | JPEG with a Multi-Picture index (MPO) | `NumberOfImages`, `image<N>:Type`, `image<N>:Size` (computed) | no |
 | `icc:` | JPEG (APP2, split profiles are joined), PNG `iCCP`, TIFF/DNG (tag 34675), WebP `ICCP` | `Version`, `ProfileClass`, `ColorSpace`, `ConnectionSpace`, `CreationDate`, `Platform`, `RenderingIntent`, `Description`, `Copyright` | no |
 | `png:` | PNG `tEXt`/`zTXt`/`iTXt` | keyword; an `iTXt` with a language tag is `keyword@language` | no |

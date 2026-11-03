@@ -270,6 +270,13 @@ def health():
     return {"status": "ok", "version": settings.version, "app": settings.app_name}
 
 
+@router.get("/aliases")
+def aliases():
+    """Other names of common fields, for searching by what a person would type."""
+    from core.aliases import ALIASES
+    return {"aliases": ALIASES}
+
+
 # ──────────────────────────────── /hash ──────────────────────────────────────
 
 _SUPPORTED_ALGORITHMS = {"md5", "sha1", "sha256", "sha512", "blake2b"}

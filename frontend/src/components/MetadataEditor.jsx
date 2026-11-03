@@ -24,7 +24,7 @@ function describeSave(edited, added, deleted) {
 // exclusively from the server's `editable` / `deletable` flags.
 const GROUPS = [
   ['exif', 'EXIF'], ['gps', 'GPS'], ['img', 'Image'], ['xmp', 'XMP'], ['iptc', 'IPTC'],
-  ['png', 'PNG'], ['pngchunk', 'PNG chunks'], ['heif', 'HEIF'], ['jfif', 'JFIF'], ['jpeg', 'JPEG'], ['mpf', 'MPF'], ['icc', 'ICC profile'], ['gif', 'GIF'], ['tag', 'Tags'], ['vorbis', 'Vorbis'], ['flac', 'FLAC'],
+  ['png', 'PNG'], ['pngchunk', 'PNG chunks'], ['heif', 'HEIF'], ['jfif', 'JFIF'], ['jpeg', 'JPEG'], ['mpf', 'MPF'], ['icc', 'ICC profile'], ['maker', 'Camera maker'], ['gif', 'GIF'], ['tag', 'Tags'], ['vorbis', 'Vorbis'], ['flac', 'FLAC'],
   ['mp4', 'MP4'], ['qt', 'QuickTime'], ['mkv', 'Matroska'], ['asf', 'ASF'], ['ape', 'APE'], ['audio', 'Audio'], ['video', 'Video'],
   ['pdf', 'PDF'], ['office', 'Office'], ['odf', 'OpenDocument'], ['epub', 'EPUB'], ['ole', 'OLE'], ['hachoir', 'Hachoir'],
   ['other', 'Other'], ['fs', 'Filesystem'], ['xattr', 'Extended attributes'],

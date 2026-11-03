@@ -214,7 +214,8 @@ def _is_volatile(key: str, sample: Sample) -> bool:
 
 def _projection(record: MetadataRecord, sample: Sample, exclude=()) -> dict[str, tuple]:
     return {f.key: (_canon(f.value), f.field_type, f.multi, f.length, f.editable, f.deletable)
-            for f in record.fields if f.key not in exclude and not _is_volatile(f.key, sample)}
+            for f in record.fields if f.key not in exclude and not _is_volatile(f.key, sample)
+            and not (f.computed and f.key.partition("@")[0] in exclude)}
 
 
 def _assert_same(before: dict, after: dict, context: str) -> None:

@@ -22,6 +22,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - **Canon CR3 and Fujifilm RAF** raw files: EXIF, GPS and the preview picture metadata are read.
 - **PDF:** the XMP metadata stream is now shown and can be removed as a whole (its edit history and identifiers
   were previously kept); **TIFF:** the IPTC record can be removed as a whole.
+- **Other languages of XMP texts** (title, description...) are listed next to the main text (`xmp:dc:title@de`),
+  read only. **Camera maker data:** the serial number, owner name, lens and similar values stored in Canon, Nikon
+  and Sony camera notes are shown (`maker:*`, read only) and counted as device or identity data when preparing a
+  file for sharing; removing the camera note removes them.
+- **Search by common names.** The names used by the search box are also served by the sidecar (`GET /aliases`).
+- **Canon CR3 and Fujifilm RAF** files now say why they are read only.
 - **Operations on several files.** A *Batch* button in the file list works on the selected files: prepare them
   for sharing, shift their dates (minutes, hours or days, forwards or backwards), copy the metadata of the first
   file to the others, rename from metadata (template such as `{exif:DateTimeOriginal|%Y%m%d}_{name}`) and, for the

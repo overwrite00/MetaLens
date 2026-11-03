@@ -485,6 +485,19 @@ class XmpPacket:
             return None
         return [li.text for li in items]
 
+    def other_languages(self, prop: Prop) -> list[tuple[str, str]]:
+        """``(language, text)`` of the alternatives of an ``rdf:Alt`` that are not the one ``read_value`` gives."""
+        if prop.attr:
+            return []
+        elems = prop.node.elements()
+        if len(elems) != 1 or not elems[0].is_(RDF, "Alt"):
+            return []
+        items = elems[0].elements()
+        if any(not li.is_(RDF, "li") or li.elements() for li in items):
+            return []
+        main = next((li for li in items if li.attr(XML_NS, "lang") == "x-default"), items[0] if items else None)
+        return [(li.attr(XML_NS, "lang") or "und", li.text) for li in items if li is not main]
+
     def has_alternatives(self, prop: Prop) -> bool:
         """``prop`` is an ``rdf:Alt`` with more than one alternative (other languages)."""
         if prop.attr:

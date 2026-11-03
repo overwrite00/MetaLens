@@ -9,7 +9,7 @@ const SOURCE_VARIANTS = {
   id3: 'purple', vorbis: 'purple', mp4: 'purple', asf: 'purple', ape: 'purple', audio: 'purple', flac: 'purple',
   pdf: 'warning', office: 'warning', ole: 'warning',
   filesystem: 'default', xattr: 'default',
-  hachoir: 'default', video: 'purple', image: 'cyan', qt: 'purple', mkv: 'purple', odf: 'warning', epub: 'warning', heif: 'cyan', icc: 'cyan', jfif: 'cyan', jpeg: 'cyan', mpf: 'cyan',
+  hachoir: 'default', video: 'purple', image: 'cyan', qt: 'purple', mkv: 'purple', odf: 'warning', epub: 'warning', heif: 'cyan', icc: 'cyan', maker: 'cyan', jfif: 'cyan', jpeg: 'cyan', mpf: 'cyan',
 }
 
 export function MetadataTable({ fields: allFields = [] }) {

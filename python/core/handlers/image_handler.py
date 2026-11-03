@@ -39,7 +39,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from core import exif_codec, icc, image_containers, iptc, jpeg_segments, sniff, tiff_inplace, values, xmp
+from core import exif_codec, icc, image_containers, iptc, jpeg_segments, makernote, sniff, tiff_inplace, values, xmp
 from core.base_handler import ABSENT, BaseMetadataHandler, Snapshot
 from core.errors import ErrorCode, MetadataValueError, MetadataValueErrors
 from core.models import MetadataField, MetadataRecord
@@ -1028,11 +1028,28 @@ def _exif_fields(block: exif_codec.ExifBlock, writable: bool) -> list[MetadataFi
             if tag in exif_codec.HIDDEN_TAGS:
                 continue
             fields.append(_exif_field(block, ifd, tag, writable))
+    fields += _makernote_fields(block)
     if block.thumbnail is not None:
         fields.append(MetadataField.binary_field(
             "exif:Thumbnail", "Thumbnail", block.thumbnail, mime="image/jpeg",
             deletable=False, source="exif"))
     return fields
+
+
+def _makernote_fields(block: exif_codec.ExifBlock) -> list[MetadataField]:
+    """Known values of the vendor MakerNote, read only (removing the MakerNote removes them)."""
+    note = block.ifds["Exif"].get(exif_codec.MAKERNOTE[1])
+    if note is None:
+        return []
+    make = block.ifds["0th"].get(0x010F)
+    make_text = make.data.split(b"\x00", 1)[0].decode("ascii", "replace") if make else ""
+    try:
+        found = makernote.read(make_text, note.data, block.byteorder, block.pins.get(exif_codec.MAKERNOTE))
+    except (struct.error, ValueError, IndexError):
+        return []
+    return [MetadataField(f"maker:{v.vendor}:{v.name}", f"{v.vendor.title()} {v.label}", v.value, editable=False,
+                          deletable=False, field_type="int" if isinstance(v.value, int) else "str", source="maker",
+                          computed=True) for v in found]
 
 
 def _exif_field(block, ifd: str, tag: int, writable: bool) -> MetadataField:
@@ -1119,6 +1136,7 @@ def _xmp_fields(packet: xmp.XmpPacket, writable: bool) -> list[MetadataField]:
             f = _unmapped_xmp_field(packet, prop, writable)
         if f is not None:
             fields.append(f)
+            fields += _xmp_language_fields(packet, prop, f)
         else:
             hidden.append(prop)
     if hidden:
@@ -1128,6 +1146,16 @@ def _xmp_fields(packet: xmp.XmpPacket, writable: bool) -> list[MetadataField]:
         fields.append(MetadataField(XMP_HIDDEN_KEY, "XMP data not shown", names, raw_value=names, editable=False,
                                     deletable=writable, field_type="str", source="xmp", multi=True, computed=True))
     return fields
+
+
+def _xmp_language_fields(packet: xmp.XmpPacket, prop: xmp.Prop, main: MetadataField) -> list[MetadataField]:
+    """The other languages of a text with alternatives, one read-only field each (``<key>@<language>``). They go
+    with the main field: removing it removes them."""
+    out = []
+    for lang, text in packet.other_languages(prop):
+        out.append(MetadataField(f"{main.key}@{lang}", f"{main.label} ({lang})", text, editable=False,
+                                 deletable=False, field_type="text", source="xmp", computed=True))
+    return out
 
 
 def _xmp_hidden(packet: xmp.XmpPacket) -> list[tuple[str, str]]:
@@ -1451,6 +1479,7 @@ class ImageHandler(BaseMetadataHandler):
         suffix = path.suffix.lower()
         writable = False
         reason = None
+        raw_reason = None
         try:
             head = _read_head(path)
         except OSError as exc:
@@ -1532,8 +1561,10 @@ class ImageHandler(BaseMetadataHandler):
                                 warnings.append(f"XMP not readable: {exc}")
             elif head[4:12] == b"ftypcrx " or (suffix == ".cr3" and head[4:8] == b"ftyp"):
                 fields += _cr3_fields(path, warnings)
+                raw_reason = "Canon CR3 files can be read but not changed"
             elif head[:15] == b"FUJIFILMCCD-RAW":
                 fields += _raf_fields(path, warnings)
+                raw_reason = "Fujifilm RAF files can be read but not changed"
             elif suffix in _READ_ONLY_EXTS:
                 warnings.append("EXIF of this RAW format is not read")
         except Exception as exc:  # read never raises: unexpected data is a read error, read-only
@@ -1545,6 +1576,8 @@ class ImageHandler(BaseMetadataHandler):
                                    supports_write=writable, supports_delete=writable)
         if reason and _container_kind(path) and not errors:
             record.read_only_reason = reason
+        elif raw_reason and not errors:
+            record.read_only_reason = raw_reason
         record.fields = fields
         if not writable or errors:
             for f in fields:
