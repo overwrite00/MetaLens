@@ -1,0 +1,166 @@
+name: Smoke test packages
+
+# Installs the Linux packages (.deb, .rpm, .tar.gz) on the distributions we support and runs
+# scripts/smoke_sidecar.sh against the INSTALLED sidecar: it starts, authenticates, reads a set
+# of real sample files of every format family and does a write + undo round trip.
+#
+# - workflow_call: used by build.yml to gate the beta release (packages from this run's artifacts).
+# - push on ci/** branches (no inputs): lets this workflow be developed without publishing a beta; it tests
+#   the packages of the latest published release.
+
+on:
+  workflow_call:
+    inputs:
+      expected_version:
+        description: Version the sidecar must report on /health (python/config.py VERSION)
+        required: true
+        type: string
+      channel:
+        description: beta or stable - selects the linux-*-<channel> artifacts of the calling run
+        required: true
+        type: string
+  push:
+    branches: ['ci/**']
+
+permissions:
+  contents: read
+
+jobs:
+  samples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: python/requirements*.txt
+      - name: Build the sample files
+        run: |
+          cd python
+          pip install -r requirements-dev.txt -q
+          python -m tests.factories --out ../smoke-samples $(cat ../scripts/smoke_samples.txt)
+      - uses: actions/upload-artifact@v7
+        with:
+          name: smoke-samples
+          path: smoke-samples
+          if-no-files-found: error
+
+  packages:
+    runs-on: ubuntu-latest
+    steps:
+      # Called from build.yml (inputs are set): take the packages built in the same run.
+      # NB: github.event_name is the CALLER's event (push), so it cannot tell the two modes apart.
+      - name: Download the packages built in this run
+        if: inputs.expected_version != ''
+        uses: actions/download-artifact@v8
+        with:
+          pattern: linux-*-${{ inputs.channel }}
+          merge-multiple: true
+          path: pkgs
+      # Pushed on a ci/** branch: take the packages of the latest published release.
+      - name: Download the latest release packages
+        if: inputs.expected_version == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --json tagName --jq '.[0].tagName')
+          echo "Testing the packages of $TAG"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir pkgs --pattern '*.deb' --pattern '*.rpm' --pattern '*.tar.gz'
+      - name: Put the packages in one flat folder
+        run: |
+          # Artifacts keep their sub-folders (pkgs/deb/..., pkgs/rpm/...); a release download does not.
+          mkdir flat
+          for pat in '*.deb' '*.rpm' '*.tar.gz'; do
+            find pkgs -type f -name "$pat" -exec cp -t flat {} +
+          done
+          ls -l flat
+          for ext in deb rpm tar.gz; do
+            ls flat/*.$ext >/dev/null 2>&1 || { echo "::error::no .$ext package found"; exit 1; }
+          done
+      - uses: actions/upload-artifact@v7
+        with:
+          name: smoke-packages
+          path: flat
+          if-no-files-found: error
+
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      expected: ${{ steps.v.outputs.expected }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: v
+        env:
+          INPUT_VERSION: ${{ inputs.expected_version }}
+        run: |
+          V="$INPUT_VERSION"
+          if [ -z "$V" ]; then V=$(grep -oP 'VERSION\s*=\s*"[^"]+' python/config.py | grep -oP '[0-9][^"]*'); fi
+          echo "expected=$V" >> "$GITHUB_OUTPUT"
+          echo "Sidecar must report version $V"
+
+  smoke:
+    needs: [samples, packages, version]
+    runs-on: ubuntu-24.04
+    # Only distributions with long remaining support (LTS or recent). Review this list when one
+    # approaches its end of support (Ubuntu 22.04 and Debian 12 were dropped on 2026-11-02).
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: ubuntu-24.04 deb, image: 'ubuntu:24.04', kind: deb }
+          - { name: ubuntu-26.04 deb, image: 'ubuntu:26.04', kind: deb }
+          - { name: debian-13 deb, image: 'debian:13', kind: deb }
+          - { name: rocky-9 rpm, image: 'rockylinux:9', kind: rpm }
+          - { name: rocky-10 rpm, image: 'rockylinux/rockylinux:10', kind: rpm }
+          - { name: fedora-latest rpm, image: 'fedora:latest', kind: rpm }
+          # Oldest glibc we promise (2.34, the one the sidecar is built against).
+          - { name: rocky-9 tar.gz, image: 'rockylinux:9', kind: tar }
+    name: ${{ matrix.name }}
+    container: ${{ matrix.image }}
+    steps:
+      - name: Install the tools the smoke test needs
+        run: |
+          if command -v apt-get >/dev/null; then
+            apt-get update -qq
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl ca-certificates findutils procps >/dev/null
+          else
+            dnf install -y -q curl findutils procps-ng --allowerasing >/dev/null
+          fi
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: smoke-samples
+          path: smoke-samples
+      - uses: actions/download-artifact@v8
+        with:
+          name: smoke-packages
+          path: pkgs
+      - name: Install the package
+        run: |
+          case "${{ matrix.kind }}" in
+            deb)
+              DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ./pkgs/*.deb >/dev/null ;;
+            rpm)
+              dnf install -y -q ./pkgs/*.rpm >/dev/null ;;
+            tar)
+              mkdir -p /opt/metalens && tar -xzf pkgs/*.tar.gz -C /opt/metalens ;;
+          esac
+      - name: Locate the installed sidecar and the Electron binary
+        run: |
+          SIDECAR=$(find / -xdev -name metalens-sidecar -type f 2>/dev/null | head -1)
+          APP=$(find / -xdev -name metalens -type f -perm -u+x 2>/dev/null | head -1)
+          echo "sidecar: $SIDECAR"; echo "app:     $APP"
+          [ -n "$SIDECAR" ] || { echo "::error::metalens-sidecar not found after installing the package"; exit 1; }
+          [ -n "$APP" ] || { echo "::error::the metalens executable was not found after installing the package"; exit 1; }
+          echo "SIDECAR=$SIDECAR" >> "$GITHUB_ENV"
+          echo "APP=$APP" >> "$GITHUB_ENV"
+      - name: The packaged app has all its shared libraries
+        if: matrix.kind != 'tar'
+        run: |
+          # Electron needs GTK, NSS, ... : the package dependencies must pull them in.
+          MISSING=$(ldd "$APP" 2>&1 | grep 'not found' || true)
+          if [ -n "$MISSING" ]; then echo "::error::missing libraries after installing the package:"; echo "$MISSING"; exit 1; fi
+          echo "all libraries of $APP resolve"
+      - name: Run the smoke test against the installed sidecar
+        run: bash scripts/smoke_sidecar.sh "${{ needs.version.outputs.expected }}" smoke-samples "$SIDECAR"

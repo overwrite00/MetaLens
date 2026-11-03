@@ -15,6 +15,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ---
 
+## [0.4.1] — 2026-11-03
+
+This release contains no change to the application itself: it hardens the build and release pipeline
+(the program is the same as 0.4.0).
+
+### CI/CD
+- `test-python-windows` now gates the beta (it is in the `needs` of `get-version-beta`).
+- The stable pipeline runs no tests, so `find-latest-beta` now also checks that `main` has the same
+  code as the matching beta (only documentation may differ) and stops the release otherwise.
+- New smoke test of the packages (`scripts/smoke_sidecar.sh`, `.github/workflows/smoke-packages.yml`): the
+  `.deb`, `.rpm` and `.tar.gz` are installed on Ubuntu 24.04 and 26.04, Debian 13, Rocky Linux 9 and 10 and
+  current Fedora, and the installed sidecar must start, require its token, read sample files of every format
+  family and complete a write + undo round trip (the app's shared libraries must also resolve). The packaged
+  Windows sidecar is exercised the same way. It gates both the beta and the stable release: nothing is
+  published if a package is broken. The stable rebuilds its packages and tests those.
+
+### Documentation
+- macOS: extended attributes stay read-only (stated in the requirements guide).
+
+---
+
 ## [0.4.0] — 2026-11-02
 
 ### Security

@@ -29,9 +29,11 @@ Requirements for running the pre-built MetaLens application and, separately, for
 - **Minimum C library:** glibc 2.34 — the bundled sidecar is built on RHEL 9. This covers Ubuntu 22.04+, Debian 12+, RHEL 9 / 10 (Rocky, AlmaLinux) and current Fedora
 - **Not supported:** RHEL 8 and older (glibc older than 2.34)
 - **Tested:** installing each package and starting the sidecar (not the full desktop window) was verified in containers on Ubuntu 22.04 / 24.04 / 26.04, Debian 12 / 13, Fedora 43 / 44, Rocky Linux 9 and AlmaLinux 10 (`.tar.gz` on Debian 12, Ubuntu 22.04 and Fedora 44)
+- **Automated check (CI, every beta):** the packages are installed on Ubuntu 24.04 and 26.04, Debian 13, Rocky Linux 9 and 10 and current Fedora (the `.tar.gz` on Rocky Linux 9, which has the oldest supported glibc). The installed sidecar must start, require its token, read sample files of every format family and complete a write + undo round trip, and the app's shared libraries must resolve. Only distributions with long remaining support are in this list; older ones keep working as long as they meet the glibc baseline.
 
 ### 🍎 macOS
 - **Status:** ❌ Not currently packaged — no macOS build is produced by CI. Building from source with `npm run make` is possible but unverified.
+- **Extended attributes (xattr):** read-only on macOS. Writing them needs a macOS machine to be verified (the CI has no macOS runner and no Mac build is published), and an unverified write could corrupt user data, so it is not offered. Linux `user.` attributes are writable and covered by the CI.
 
 ---
 

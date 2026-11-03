@@ -52,7 +52,8 @@ jobs:
           pytest tests/ -v
 
   # Same suite on Windows: atomic replace (ReplaceFileW), file attributes, DACL/ADS and
-  # pre-1970 timestamps are Windows-specific. Not a dependency of the beta/stable jobs.
+  # pre-1970 timestamps are Windows-specific. Gates the beta (get-version-beta); the stable
+  # is gated through find-latest-beta, which requires main to be the code of that beta.
   test-python-windows:
     if: github.ref == 'refs/heads/develop' || (github.event_name == 'pull_request' && github.base_ref == 'develop')
     runs-on: windows-latest
@@ -147,7 +148,7 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   get-version-beta:
     if: github.ref == 'refs/heads/develop'
-    needs: [test-python, test-frontend, test-electron]
+    needs: [test-python, test-python-windows, test-frontend, test-electron]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -198,6 +199,15 @@ jobs:
             --hidden-import hachoir `
             --hidden-import olefile `
             --hidden-import pypdf
+      - name: Smoke test the packaged sidecar
+        shell: bash
+        run: |
+          # Starts the PyInstaller exe that will be shipped and exercises it (scripts/smoke_sidecar.sh).
+          cd python
+          pip install -r requirements-dev.txt -q
+          python -m tests.factories --out ../smoke-samples $(cat ../scripts/smoke_samples.txt)
+          cd ..
+          bash scripts/smoke_sidecar.sh "${{ needs.get-version-beta.outputs.base_version }}" "$PWD/smoke-samples" "$PWD/python/dist/metalens-sidecar.exe"
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
@@ -404,9 +414,19 @@ jobs:
           path: electron/out/make/**/*.rpm
           if-no-files-found: error
 
+  # Installs the .deb/.rpm/.tar.gz on the supported distributions and exercises the installed
+  # sidecar (see smoke-packages.yml). Gates the beta: nothing is published if a package is broken.
+  smoke-linux-beta:
+    if: github.ref == 'refs/heads/develop'
+    needs: [get-version-beta, build-linux-beta, build-rpm-beta]
+    uses: ./.github/workflows/smoke-packages.yml
+    with:
+      expected_version: ${{ needs.get-version-beta.outputs.base_version }}
+      channel: beta
+
   release-beta:
     if: github.ref == 'refs/heads/develop'
-    needs: [get-version-beta, build-windows-beta, build-linux-beta, build-rpm-beta]
+    needs: [get-version-beta, build-windows-beta, build-linux-beta, build-rpm-beta, smoke-linux-beta]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -492,6 +512,9 @@ jobs:
     outputs:
       beta_tag: ${{ steps.find.outputs.beta_tag }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # full history and tags, to compare main with the beta tag
       - id: find
         env:
           GH_TOKEN: ${{ github.token }}
@@ -508,6 +531,21 @@ jobs:
           fi
           echo "beta_tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "Validated matching beta $TAG for stable v${VERSION}"
+      - name: Verify main has the code that the beta tested
+        env:
+          TAG: ${{ steps.find.outputs.beta_tag }}
+        run: |
+          # The test jobs only run on develop and gate the beta; the stable runs no tests.
+          # So the stable is allowed only if everything outside the files the workflow
+          # ignores (docs, markdown) is identical to the validated beta.
+          CHANGED=$(git diff --name-only "$TAG" HEAD | grep -Ev '^(docs/|README\.md$|CHANGELOG\.md$|LICENSE$|[^/]+\.md$)' || true)
+          if [ -n "$CHANGED" ]; then
+            echo "::error::main differs from $TAG in files that were not validated by the beta pipeline:"
+            echo "$CHANGED"
+            echo "::error::Push these changes to develop first, wait for the new beta, then promote."
+            exit 1
+          fi
+          echo "main matches $TAG (only documentation may differ)"
 
   build-windows-stable:
     if: github.ref == 'refs/heads/main'
@@ -536,6 +574,15 @@ jobs:
             --hidden-import hachoir `
             --hidden-import olefile `
             --hidden-import pypdf
+      - name: Smoke test the packaged sidecar
+        shell: bash
+        run: |
+          # Starts the PyInstaller exe that will be shipped and exercises it (scripts/smoke_sidecar.sh).
+          cd python
+          pip install -r requirements-dev.txt -q
+          python -m tests.factories --out ../smoke-samples $(cat ../scripts/smoke_samples.txt)
+          cd ..
+          bash scripts/smoke_sidecar.sh "${{ needs.get-version.outputs.version }}" "$PWD/smoke-samples" "$PWD/python/dist/metalens-sidecar.exe"
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
@@ -758,9 +805,19 @@ jobs:
           path: electron/out/make/**/*.rpm
           if-no-files-found: error
 
+  # Same smoke test on the packages the stable release will ship (they are rebuilt, not reused
+  # from the beta): nothing is published if one of them does not install or start.
+  smoke-linux-stable:
+    if: github.ref == 'refs/heads/main'
+    needs: [get-version, build-linux-stable, build-rpm-stable]
+    uses: ./.github/workflows/smoke-packages.yml
+    with:
+      expected_version: ${{ needs.get-version.outputs.version }}
+      channel: stable
+
   release-stable:
     if: github.ref == 'refs/heads/main'
-    needs: [get-version, find-latest-beta, build-windows-stable, build-linux-stable, build-rpm-stable]
+    needs: [get-version, find-latest-beta, build-windows-stable, build-linux-stable, build-rpm-stable, smoke-linux-stable]
     runs-on: ubuntu-latest
     permissions:
       contents: write
