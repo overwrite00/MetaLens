@@ -13,9 +13,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - [ ] **Batch Edit** — Apply a field change to multiple selected files at once
 - [ ] **Search/Filter Bar** — Filter the file list by name or extension
 
-### Changed
-- Version bumped to 0.4.1 on `develop` after the 0.4.0 stable release; beta builds of the next
-  release are numbered `0.4.1-beta.N`.
+---
+
+## [0.4.1] — 2026-11-03
+
+This release contains no change to the application itself: it hardens the build and release pipeline
+(the program is the same as 0.4.0).
 
 ### CI/CD
 - `test-python-windows` now gates the beta (it is in the `needs` of `get-version-beta`).
