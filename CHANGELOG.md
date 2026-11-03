@@ -17,6 +17,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - **Add a position.** The Batch dialog puts a latitude and longitude on the selected pictures, or looks up the
   position of each picture by its capture time along a GPX track (with a camera-clock offset and a maximum gap);
   pictures of formats that cannot hold a position are reported. GPS entries can now also be added by hand.
+- **Legacy Office (DOC, XLS, PPT):** the document properties (author, company, manager, custom ones...) can be
+  removed in place, without changing the size of the file; Undo restores it exactly.
 - **Canon CR3 and Fujifilm RAF** raw files: EXIF, GPS and the preview picture metadata are read.
 - **PDF:** the XMP metadata stream is now shown and can be removed as a whole (its edit history and identifiers
   were previously kept); **TIFF:** the IPTC record can be removed as a whole.

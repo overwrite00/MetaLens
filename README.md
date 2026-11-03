@@ -134,7 +134,7 @@ Explore the sidecar API in [API.md](docs/API.md).
 | Office | DOCX, XLSX, PPTX, DOCM, XLSM, PPTM — core properties (not digitally signed); `app.xml`/`custom.xml` values can be removed | ✅ | ✅ |
 | OpenDocument | ODT, ODS, ODP, ODG and templates (`meta.xml`) | ✅ | ✅ |
 | E-books | EPUB (package metadata; identifier, title and language stay) | ✅ | ✅ |
-| Office (legacy) | DOC, XLS, PPT, DOT, XLT, POT (OLE property sets) | ✅ | — |
+| Office (legacy) | DOC, XLS, PPT, DOT, XLT, POT (OLE property sets; properties can be removed, not edited) | ✅ | 🗑️ remove |
 | Any file | Filesystem: `fs:mtime` writable; size, other timestamps, permissions/owner (POSIX), Windows attributes read-only; xattr (Linux: `user.` writable; macOS: read-only) | ✅ | ✅ (mtime, xattr) |
 | Other | Many more formats recognized from their content via hachoir | ✅ | — |
 

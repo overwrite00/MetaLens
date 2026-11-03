@@ -408,6 +408,62 @@ def _heading_pairs(value: Any) -> Any:
     return pairs
 
 
+def _keys_of(sec: Section) -> dict[int, str]:
+    """Field key of each property of a section (the same keys ``_section_fields`` gives)."""
+    if sec.fmtid == FMTID_SUMMARY:
+        return {pid: _SUMMARY_PROPS[pid][0] for pid in sec.props if pid in _SUMMARY_PROPS}
+    if sec.fmtid == FMTID_DOC_SUMMARY:
+        return {pid: _DOC_SUMMARY_PROPS[pid][0] for pid in sec.props if pid in _DOC_SUMMARY_PROPS}
+    if sec.fmtid == FMTID_USER_DEFINED:
+        return {pid: f"ole:custom:{sec.names.get(pid) or f'pid{pid}'}" for pid in sec.props
+                if pid >= 2 and not pid & 0x80000000}
+    return {}
+
+
+def removal_plan(streams: dict[str, bytes]) -> dict[str, list[tuple[str, int, bytes, bytes]]]:
+    """``{key: [(stream, offset, original, replacement)]}``: a property is removed by giving its value the type
+    "empty" and zeroing the rest of the room it had, so nothing in the stream moves."""
+    plan: dict[str, list[tuple[str, int, bytes, bytes]]] = {}
+    for name, data in streams.items():
+        try:
+            sections = parse_property_set(data)
+            count = struct.unpack_from("<I", data, 24)[0]
+        except (ValueError, struct.error):
+            continue
+        for index, sec in enumerate(sections[:count]):
+            start = struct.unpack_from("<I", data, 44 + 20 * index)[0]
+            size = min(struct.unpack_from("<I", data, start)[0], len(data) - start)
+            num = struct.unpack_from("<I", data, start + 4)[0]
+            table = sorted((struct.unpack_from("<II", data, start + 8 + 8 * j) for j in range(num)), key=lambda e: e[1])
+            ends = {pid: (table[k + 1][1] if k + 1 < len(table) else size) for k, (pid, _off) in enumerate(table)}
+            offsets = dict(table)
+            for pid, key in _keys_of(sec).items():
+                if pid not in offsets:
+                    continue
+                lo, hi = start + offsets[pid], start + ends[pid]
+                if hi - lo < 4 or hi > len(data):
+                    continue
+                plan.setdefault(key, []).append((name, lo, bytes(data[lo:hi]), bytes(hi - lo)))
+    return plan
+
+
+def _read_streams(path: Path) -> dict[str, bytes]:
+    import olefile
+    out = {}
+    with olefile.OleFileIO(str(path)) as ole:
+        for name in (SUMMARY_STREAM, DOC_SUMMARY_STREAM):
+            if ole.exists(name):
+                out[name] = ole.openstream(name).read()
+    return out
+
+
+def _write_streams(path: Path, changes: dict[str, bytes]) -> None:
+    import olefile
+    with olefile.OleFileIO(str(path), write_mode=True) as ole:
+        for name, data in changes.items():
+            ole.write_stream(name, data)          # same size as before: only values are overwritten
+
+
 class OleHandler(BaseMetadataHandler):
     NAME = "ole"
     EXTENSIONS = _OLE_EXTS
@@ -437,17 +493,59 @@ class OleHandler(BaseMetadataHandler):
         except Exception as e:
             errors.append(f"OLE read error: {e}")
 
+        writable = not errors
+        for f in fields:
+            f.deletable = writable
         record = self._make_record(path, read_errors=errors, warnings=warnings,
-                                   supports_write=False, supports_delete=False)
+                                   supports_write=False, supports_delete=writable)
         record.fields = fields
         record.dedupe_keys()
         return record
 
+    # ── mutation hooks: properties are removed in place (the values are never edited) ──
+    def apply_delete(self, tmp: Path, keys: list[str]) -> None:
+        from core.errors import ErrorCode, MetadataValueError, MetadataValueErrors
+        streams = _read_streams(tmp)
+        plan = removal_plan(streams)
+        missing = [k for k in keys if k not in plan]
+        if missing:
+            raise MetadataValueErrors([MetadataValueError(k, ErrorCode.UNKNOWN_FIELD) for k in missing])
+        changed = {name: bytearray(data) for name, data in streams.items()}
+        for key in keys:
+            for name, offset, original, replacement in plan[key]:
+                changed[name][offset:offset + len(replacement)] = replacement
+        _write_streams(tmp, {name: bytes(data) for name, data in changed.items() if bytes(data) != streams[name]})
+
+    def snapshot(self, tmp: Path, keys: list[str]):
+        from core.base_handler import ABSENT
+        from core.handlers.qt_edit import QtRaw
+        plan = removal_plan(_read_streams(tmp))
+        current = {f.key: f for f in self.read(tmp).fields}
+        return {k: (QtRaw(current[k].value, tuple(plan.get(k, ()))) if k in current and k in plan else ABSENT)
+                for k in keys}
+
+    def restore(self, tmp: Path, snap) -> None:
+        from core.base_handler import ABSENT
+        streams = _read_streams(tmp)
+        changed = {name: bytearray(data) for name, data in streams.items()}
+        plan = removal_plan(streams)
+        for key, raw in snap.items():
+            if raw is ABSENT:
+                for name, offset, _original, replacement in plan.get(key, ()):
+                    changed[name][offset:offset + len(replacement)] = replacement
+                continue
+            for name, offset, original, _replacement in raw.patches:
+                changed[name][offset:offset + len(original)] = original
+        _write_streams(tmp, {name: bytes(data) for name, data in changed.items() if bytes(data) != streams[name]})
+
+    def canonical(self, field, value):
+        raise NotImplementedError("OLE values are not edited")
+
     def write(self, path: Path, fields: list[MetadataField]) -> None:
-        raise NotImplementedError("OLE write not supported — use docx/xlsx/pptx format")
+        raise NotImplementedError("OLE values are not edited; they can only be removed")
 
     def delete(self, path: Path, keys: list[str]) -> None:
-        raise NotImplementedError("OLE delete not supported — use docx/xlsx/pptx format")
+        self._atomic_write(path, lambda tmp: self.apply_delete(tmp, keys))
 
 
 def _section_fields(sec: Section, warnings: list[str]) -> list[MetadataField]:
