@@ -220,8 +220,9 @@ class TestSecureAtomicWrite:
         with pytest.raises(PathSecurityError, match="File not found"):
             secure_atomic_write(nonexistent, writer)
 
-    def test_atomic_write_custom_suffix(self, tmp_path):
-        """Custom temp suffix should be used."""
+    def test_atomic_write_copy_keeps_the_name_of_the_target(self, tmp_path):
+        """The copy is called like the target, in a private directory (the name or
+        extension of a file decides how handlers treat it)."""
         test_file = tmp_path / "test.txt"
         test_file.write_text("original")
 
@@ -234,7 +235,9 @@ class TestSecureAtomicWrite:
         secure_atomic_write(test_file, writer, temp_suffix=".custom_tmp")
 
         assert len(temp_path_list) > 0
-        assert ".custom_tmp" in temp_path_list[0].name
+        assert temp_path_list[0].name == "test.txt"
+        assert temp_path_list[0].parent.name.startswith(".metalens-")
+        assert temp_path_list[0].parent.parent == tmp_path
 
     def test_atomic_write_binary_content(self, tmp_path):
         """Binary content should be written correctly."""

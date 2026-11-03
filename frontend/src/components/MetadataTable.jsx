@@ -1,12 +1,13 @@
 import { Badge } from './ui/Badge'
+import { PrivacySummary, SensitivityBadge } from './PrivacyIndicators'
 import { formatItems, isBinaryDescriptor, uniqueKeys, valueTitle } from '../lib/formatValue'
 
 const SOURCE_VARIANTS = {
-  exif: 'cyan', gps: 'cyan', iptc: 'cyan', xmp: 'cyan', png: 'cyan', gif: 'cyan',
+  exif: 'cyan', gps: 'cyan', iptc: 'cyan', xmp: 'cyan', png: 'cyan', gif: 'cyan', pngchunk: 'cyan',
   id3: 'purple', vorbis: 'purple', mp4: 'purple', asf: 'purple', ape: 'purple', audio: 'purple', flac: 'purple',
   pdf: 'warning', office: 'warning', ole: 'warning',
   filesystem: 'default', xattr: 'default',
-  hachoir: 'default', video: 'purple', image: 'cyan',
+  hachoir: 'default', video: 'purple', image: 'cyan', qt: 'purple', odf: 'warning', epub: 'warning', heif: 'cyan', icc: 'cyan', jfif: 'cyan', jpeg: 'cyan', mpf: 'cyan',
 }
 
 export function MetadataTable({ fields = [] }) {
@@ -28,6 +29,7 @@ export function MetadataTable({ fields = [] }) {
 
   return (
     <div className="overflow-y-auto h-full">
+      <PrivacySummary fields={fields} />
       {Object.entries(groups).map(([src, groupFields]) => {
         const keys = uniqueKeys(groupFields, f => f.key)
         return (
@@ -44,7 +46,7 @@ export function MetadataTable({ fields = [] }) {
                   {f.label || f.key}
                 </div>
                 <div className="flex-1 min-w-0 font-mono text-[11px] text-cyber-text break-all leading-relaxed">
-                  <FieldValue field={f} />
+                  <FieldValue field={f} /><SensitivityBadge field={f} />
                 </div>
                 <div className="ml-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                   {!f.editable && <Badge variant="default">ro</Badge>}

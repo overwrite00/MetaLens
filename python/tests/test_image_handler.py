@@ -399,7 +399,7 @@ def test_png_webp_expose_exif_and_gif_comment(tmp_path):
     png = _fields(_make("png_text_exif", tmp_path))
     assert png["exif:Make"].value == "Canon"
     assert png["png:Title"].value == "PNG title"
-    assert png["png:Description"].value == "Descrizione è 日本"
+    assert png["png:Description@it"].value == "Descrizione è 日本"
     assert png["png:Comment"].value.startswith("compressed comment")
     webp = _fields(_make("webp_exif", tmp_path))
     assert webp["exif:Model"].value == "EOS Test"

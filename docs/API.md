@@ -304,7 +304,8 @@ Defined in `python/core/models.py`.
 | `length` | int \| null | Fixed list size for tuples (e.g. track `[3, 10]`, GPS coordinate of 3 rationals) |
 | `choices` | array | Allowed values for `enum` fields; always present, empty otherwise |
 | `binary` | object \| array \| null | For `binary` fields: the `{size, sha256, mime}` descriptor (a list when `multi`) |
-| `source` | string | Group shown in the UI: `exif`, `gps`, `xmp`, `iptc`, `image`, `png`, `gif`, `id3`, `vorbis`, `flac`, `asf`, `ape`, `mp4`, `audio`, `video`, `pdf`, `office`, `ole`, `hachoir`, `filesystem`, `xattr` |
+| `sensitivity` | string \| null | What the field can reveal when the file is shared: `location`, `identity`, `device`, `thumbnail`, `text`, `datetime`, `software`; `null` for technical fields. Informative only: it never changes `editable`/`deletable` |
+| `source` | string | Group shown in the UI: `exif`, `gps`, `xmp`, `iptc`, `image`, `png`, `gif`, `id3`, `vorbis`, `flac`, `asf`, `ape`, `mp4`, `qt`, `heif`, `jfif`, `jpeg`, `mpf`, `icc`, `audio`, `video`, `pdf`, `office`, `odf`, `epub`, `ole`, `hachoir`, `filesystem`, `xattr` |
 
 ### `MetadataRecord`
 | Field | Type | Notes |
@@ -322,6 +323,7 @@ Defined in `python/core/models.py`.
 | `supports_write` | bool | Legacy: format **or** filesystem level writable |
 | `supports_delete` | bool | Legacy: format **or** filesystem level deletable |
 | `addable_fields` | `MetadataField[]` | Schemas (value `null`) of fields that can be added with `/write` |
+| `sensitivity_summary` | object | Number of fields per sensitivity category, most serious first (categories without fields are omitted) |
 
 If a handler ever produces two fields with the same key, the later ones are renamed `key#2`, `key#3`…, made
 read-only and reported in `warnings`.
@@ -371,20 +373,29 @@ persisted anywhere (the Undo journal is in memory), so they may change between v
 
 | Namespace | Handler / formats | Native id | Writable |
 |---|---|---|---|
-| `img:` | image (all) | `format`, `mode`, `width`, `height`, `dpi` (`[x, y]`, from JFIF/EXIF/Pillow) | no (computed) |
-| `exif:` | JPEG, TIFF, TIFF-based RAW (e.g. CR2, NEF, ARW, DNG), PNG `eXIf`, WebP `EXIF` | tag name (`exif:Artist`, `exif:DateTimeOriginal`); a tag outside its usual IFD is `exif:<IFD0\|Exif\|Interop\|IFD1>:<Name>`; unnamed tags `exif:tag_<id>` | JPEG only; image-structure tags, pointers, the thumbnail and `UNDEFINED` binaries (e.g. `MakerNote`) are read-only, binaries deletable |
+| `img:` | image (all) | `format`, `mode`, `width`, `height`, `dpi` (`[x, y]`, from JFIF/EXIF/Pillow); PNG also `bit_depth`, `color_type`, `interlace` | no (computed) |
+| `exif:` | JPEG, TIFF, TIFF-based RAW (e.g. CR2, NEF, ARW, DNG, ORF, RW2), PNG `eXIf`, WebP `EXIF` | tag name (`exif:Artist`, `exif:DateTimeOriginal`); a tag outside its usual IFD is `exif:<IFD0\|Exif\|Interop\|IFD1>:<Name>`; unnamed tags `exif:tag_<id>` | JPEG only; image-structure tags, pointers, the thumbnail and `UNDEFINED` binaries (e.g. `MakerNote`) are read-only, binaries deletable |
 | `gps:` | as `exif:` (GPS IFD) | tag name without the `GPS` prefix (`gps:Latitude`, `gps:LatitudeRef`) | JPEG only |
-| `xmp:` | JPEG (APP1 XMP), WebP `XMP ` | `xmp:<prefix>:<local>` with canonical prefixes (`xmp:dc:title`, `xmp:dc:subject`, `xmp:xmp:Rating`, `xmp:photoshop:City`, `xmp:Iptc4xmpCore:Location`…) | JPEG only, for simple values, language alternatives (`x-default`) and Bag/Seq of simple items; structs and qualifiers are not shown; extended XMP is read-only |
-| `iptc:` | JPEG (APP13 `Photoshop 3.0`, resource 0x0404) | mapped IIM name (`iptc:Keywords`, `iptc:By-line`, `iptc:Caption-Abstract`…) or `iptc:<record>:<dataset>` | JPEG only; repeatable datasets are lists; written as UTF-8 (`1:90 = ESC % G`); a legacy (non-UTF-8) charset makes IPTC read-only; an edit or delete of a dataset is mirrored to its XMP twin (and vice versa) when the twin is already in the file: Keywords↔`dc:subject`, By-line↔`dc:creator`, ObjectName↔`dc:title`, Caption-Abstract↔`dc:description`, CopyrightNotice↔`dc:rights`, Headline, City, Province-State, Country, Credit, Source, SpecialInstructions, TransmissionReference, Sub-location, Country code ↔ the matching `photoshop:`/`Iptc4xmpCore:` property. The mirror is part of the same transaction and Undo, never creates a twin, never overrides a key sent in the same request, and a value the twin cannot store is skipped with a `warnings` note |
-| `png:` | PNG `tEXt`/`zTXt`/`iTXt` | keyword | no |
+| `xmp:` | JPEG (APP1 XMP), WebP `XMP `, PNG (`XML:com.adobe.xmp` iTXt), TIFF/DNG (tag 700), MP4/MOV (XMP `uuid`) | `xmp:<prefix>:<local>` with canonical prefixes (`xmp:dc:title`, `xmp:dc:subject`, `xmp:xmp:Rating`, `xmp:photoshop:City`, `xmp:Iptc4xmpCore:Location`…) | JPEG only, for simple values, language alternatives (`x-default`) and Bag/Seq of simple items; structs and qualifiers are not shown; extended XMP is read-only |
+| `iptc:` | JPEG (APP13 `Photoshop 3.0`, resource 0x0404), TIFF/DNG (tag 33723, read-only) | mapped IIM name (`iptc:Keywords`, `iptc:By-line`, `iptc:Caption-Abstract`…) or `iptc:<record>:<dataset>` | JPEG only; repeatable datasets are lists; written as UTF-8 (`1:90 = ESC % G`); a legacy (non-UTF-8) charset makes IPTC read-only; an edit or delete of a dataset is mirrored to its XMP twin (and vice versa) when the twin is already in the file: Keywords↔`dc:subject`, By-line↔`dc:creator`, ObjectName↔`dc:title`, Caption-Abstract↔`dc:description`, CopyrightNotice↔`dc:rights`, Headline, City, Province-State, Country, Credit, Source, SpecialInstructions, TransmissionReference, Sub-location, Country code ↔ the matching `photoshop:`/`Iptc4xmpCore:` property. The mirror is part of the same transaction and Undo, never creates a twin, never overrides a key sent in the same request, and a value the twin cannot store is skipped with a `warnings` note |
+| `heif:` | HEIC / HEIF / AVIF (`.heic .heif .hif .avif`; EXIF, XMP and ICC are also served as `exif:`, `gps:`, `xmp:`, `icc:`) | `MajorBrand`, `CompatibleBrands`, `Rotation` | no (read-only) |
+| `jfif:` | JPEG (APP0 JFIF) | `Version`, `ResolutionUnit`, `XResolution`, `YResolution` | no |
+| `jpeg:` | JPEG | `Comment` (COM segments; a list when there are several) | no |
+| `mpf:` | JPEG with a Multi-Picture index (MPO) | `NumberOfImages`, `image<N>:Type`, `image<N>:Size` (computed) | no |
+| `icc:` | JPEG (APP2, split profiles are joined), PNG `iCCP`, TIFF/DNG (tag 34675), WebP `ICCP` | `Version`, `ProfileClass`, `ColorSpace`, `ConnectionSpace`, `CreationDate`, `Platform`, `RenderingIntent`, `Description`, `Copyright` | no |
+| `png:` | PNG `tEXt`/`zTXt`/`iTXt` | keyword; an `iTXt` with a language tag is `keyword@language` | no |
+| `pngchunk:` | PNG chunks that are not text | `pngchunk:tIME` (last modification, UTC) | no |
 | `gif:` | GIF | `comment` | no |
 | `tag:` | ID3 (MP3, WAV, AIFF, TTA), Vorbis comments (FLAC, Ogg Vorbis/Opus/Speex/FLAC), ASF (WMA), APEv2 (APE, WavPack, Musepack) | ID3 FrameID (`tag:TPE1`, `tag:TXXX:<desc>`, `tag:COMM:<desc>:<lang>`, URL frames grouped by FrameID); lowercase Vorbis name (`tag:artist`); ASF attribute name; APE item key | yes, except AAC and other read-only formats; pictures, private and structured frames (APIC, GEOB, PRIV, POPM, PCNT, SYLT…) are read-only but deletable |
 | `flac:` | FLAC | `picture` (picture blocks) | read-only, deletable |
+| `qt:` | MP4 family: M4A/M4B/M4R, MP4/M4V/MOV | `qt:MajorBrand`, `qt:CompatibleBrands`, `qt:CreateDate`/`qt:ModifyDate` (movie header, UTC), `qt:TimeScale`, per track by track ID `qt:track<ID>:HandlerType/CreateDate/Language/MediaTimeScale/Width/Height/Rotation/CodecID/Channels/SampleRate/FrameRate`, QuickTime keys `qt:mdta:<key>` (e.g. `com.apple.quicktime.location.ISO6709`), `qt:udta:<atom>` | no (read-only) |
 | `mp4:` | MP4 family: M4A/M4B/M4R (audio), MP4/M4V/MOV (video) | `ilst` atom (`mp4:©ART`, `mp4:trkn`, `mp4:covr`, freeform `mp4:----:<mean>:<name>`) | yes; `covr` and non-UTF-8 freeform values read-only but deletable |
 | `audio:` | audio files, first audio track of MP4 | `duration`, `bitrate`, `sample_rate`, `channels`, `bits_per_sample`, `codec` | no (computed) |
 | `video:` | MP4 family | `duration` | no (computed) |
-| `pdf:` | PDF | `/Info` entry without the slash (`pdf:Title`, `pdf:CreationDate`); computed `pdf:page_count`, `pdf:encrypted`, `pdf:signed` (an `/Info` entry with one of those names is `pdf:<name>#info`) | text and date entries, unless the PDF is encrypted or signed; `/Trapped`, numbers and booleans read-only but deletable |
+| `pdf:` | PDF | `/Info` entry without the slash (`pdf:Title`, `pdf:CreationDate`); computed `pdf:page_count`, `pdf:encrypted`, `pdf:signed`, `pdf:PDFVersion`, `pdf:Linearized` (an `/Info` entry with one of those names is `pdf:<name>#info`) | text and date entries, unless the PDF is encrypted or signed; `/Trapped`, numbers and booleans read-only but deletable |
 | `office:` | DOCX/XLSX/PPTX/DOCM/XLSM/PPTM | core property (`office:title`, `office:author`, `office:created`…); `office:app.<Name>` (docProps/app.xml), `office:custom.<name>` (docProps/custom.xml) | core properties only, unless the package is signed; `app.`/`custom.` read-only |
+| `odf:` | OpenDocument (`.odt .ods .odp .odg` and templates) | `title`, `subject`, `description`, `initial-creator` (author), `creator` (last modified by), `keyword`, dates, `editing-cycles`, `editing-duration`, `stat.<name>`, `custom.<name>` | no (read-only) |
+| `epub:` | EPUB | `version`, `title`, `creator`, `language`, `identifier`, `publisher`, `date`, `subject`, `description`, `rights`, `modified`… | no (read-only) |
 | `ole:` | DOC/XLS/PPT/DOT/XLT/POT | SummaryInformation and DocumentSummaryInformation property (`ole:author`, `ole:company`…), user-defined `ole:custom:<name>` | no |
 | `hachoir:` | fallback for other files; MKV/WebM/AVI/WMV/FLV/TS/MTS/M2TS (video handler) | `hachoir:<group index>:<item key>` (group 0 = root metadata, then one group per stream) | no |
 | `fs:` | every file | `size`, `mtime`, `ctime` (creation time on Windows, metadata change on POSIX), `atime`, `win_attrs` (Windows), `permissions`/`owner`/`group` (POSIX) | `fs:mtime` only |
@@ -392,5 +403,5 @@ persisted anywhere (the Undo journal is in memory), so they may change between v
 
 ---
 
-*Last updated: 2026-11-02*
+*Last updated: 2026-11-03*
 *← [Usage](./USAGE.md) | [Back to README →](../README.md)*

@@ -3,8 +3,9 @@
 * Primary handlers own the format metadata of a file. ``get(path)`` returns the
   first one, by ``PRIORITY``, whose ``can_handle`` accepts the path. ``hachoir``
   (``PRIORITY = 100``, accepts everything) is the catch-all for unknown
-  extensions and extension-less files: it recognizes the format from the
-  content (D3).
+  extensions: it recognizes the format from the content (D3). A file without
+  extension is first matched by content (``core.sniff``) to the handler that
+  owns its format; only when the bytes are not recognized does hachoir get it.
 * Layers (handlers with ``PRIMARY = False``, i.e. the filesystem layer) are never
   returned by ``get``. They apply to every file and the API adds their fields
   to each record: ``layers(path)`` / ``filesystem_layer()``.
@@ -12,6 +13,7 @@
 from __future__ import annotations
 from pathlib import Path
 
+from core import sniff
 from core.base_handler import BaseMetadataHandler
 
 
@@ -34,6 +36,12 @@ class HandlerRegistry:
         path = Path(path)
         if path.is_dir():
             raise ValueError(f"No format handler for a directory: {path}")
+        if not path.suffix:
+            # No extension: the bytes decide (a JPEG called ``photo`` is a JPEG).
+            owner = sniff.handler_name(sniff.detect(path))
+            for h in cls._handlers:
+                if owner and cls.is_primary(h) and h.NAME == owner:
+                    return h
         for h in cls._handlers:
             if cls.is_primary(h) and h.can_handle(path):
                 return h

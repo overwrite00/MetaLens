@@ -3,6 +3,7 @@ import { Save, RotateCcw, Trash2, Plus, X } from 'lucide-react'
 import { Button } from './ui/Button'
 import { FieldInput } from './FieldInput'
 import { FieldValue } from './MetadataTable'
+import { PrivacySummary, SensitivityBadge } from './PrivacyIndicators'
 import { RecordNotices } from './RecordNotices'
 import { metalens } from '../api/client'
 import { emptyInput, fromInput, inputKind, toInput } from '../lib/serializeValue'
@@ -23,9 +24,9 @@ function describeSave(edited, added, deleted) {
 // exclusively from the server's `editable` / `deletable` flags.
 const GROUPS = [
   ['exif', 'EXIF'], ['gps', 'GPS'], ['img', 'Image'], ['xmp', 'XMP'], ['iptc', 'IPTC'],
-  ['png', 'PNG'], ['gif', 'GIF'], ['tag', 'Tags'], ['vorbis', 'Vorbis'], ['flac', 'FLAC'],
-  ['mp4', 'MP4'], ['asf', 'ASF'], ['ape', 'APE'], ['audio', 'Audio'], ['video', 'Video'],
-  ['pdf', 'PDF'], ['office', 'Office'], ['ole', 'OLE'], ['hachoir', 'Hachoir'],
+  ['png', 'PNG'], ['pngchunk', 'PNG chunks'], ['heif', 'HEIF'], ['jfif', 'JFIF'], ['jpeg', 'JPEG'], ['mpf', 'MPF'], ['icc', 'ICC profile'], ['gif', 'GIF'], ['tag', 'Tags'], ['vorbis', 'Vorbis'], ['flac', 'FLAC'],
+  ['mp4', 'MP4'], ['qt', 'QuickTime'], ['asf', 'ASF'], ['ape', 'APE'], ['audio', 'Audio'], ['video', 'Video'],
+  ['pdf', 'PDF'], ['office', 'Office'], ['odf', 'OpenDocument'], ['epub', 'EPUB'], ['ole', 'OLE'], ['hachoir', 'Hachoir'],
   ['other', 'Other'], ['fs', 'Filesystem'], ['xattr', 'Extended attributes'],
 ]
 const GROUP_LABELS = Object.fromEntries(GROUPS)
@@ -192,6 +193,7 @@ export function MetadataEditor({ record, filePath, onSaved, onUndoPush, runExclu
       </div>
 
       <RecordNotices record={record} showReadOnly />
+      <PrivacySummary fields={record?.fields ?? []} />
 
       {/* Fields */}
       <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
@@ -249,6 +251,7 @@ function FieldRow({ field: f, draft, isNew, isChanged, isDeleted, error, disable
       <div className="w-36 flex-shrink-0 text-[11px] text-cyber-muted font-mono truncate pt-0.5" title={f.key}>
         {f.label || f.key}
         {isNew && <span className="ml-1 text-[9px] text-cyber-cyan">new</span>}
+        <SensitivityBadge field={f} />
       </div>
       <div className="flex-1 min-w-0">
         {isDeleted

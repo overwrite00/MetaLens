@@ -34,16 +34,25 @@ import re
 import struct
 import zlib
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
-from core import exif_codec, iptc, jpeg_segments, values, xmp
+from core import exif_codec, icc, iptc, jpeg_segments, sniff, values, xmp
 from core.base_handler import ABSENT, BaseMetadataHandler, Snapshot
 from core.errors import ErrorCode, MetadataValueError, MetadataValueErrors
 from core.models import MetadataField, MetadataRecord
 
-_READ_ONLY_EXTS = frozenset({".cr2", ".nef", ".arw", ".dng", ".orf", ".rw2", ".pef", ".srw"})
+_READ_ONLY_EXTS = frozenset({".cr2", ".nef", ".arw", ".dng", ".orf", ".rw2", ".pef", ".srw",
+                             ".rwl", ".nrw", ".srf", ".sr2", ".3fr", ".erf", ".mos", ".kdc", ".dcr", ".mef", ".iiq"})
 JPEG_EXTS = frozenset({".jpg", ".jpeg"})
+
+
+def _jpeg_name(path: Path) -> bool:
+    """A JPEG by name: ``.jpg``/``.jpeg`` or a file without extension whose bytes are a JPEG."""
+    suffix = path.suffix.lower()
+    return suffix in JPEG_EXTS or (suffix == "" and sniff.detect(path) == "jpeg")
 
 MAKERNOTE_WARNING = ("EXIF MakerNote present: it is kept byte for byte at its original offset when "
                      "EXIF is rewritten; vendor data stored outside the MakerNote itself is not tracked")
@@ -674,11 +683,35 @@ def _inflate(data: bytes) -> bytes | None:
         return None
 
 
-def _png_metadata(data: bytes, warnings: list[str]) -> tuple[list[tuple[str, str]], bytes | None]:
+_PNG_COLOR_TYPES = {0: "Grayscale", 2: "RGB", 3: "Palette", 4: "Grayscale + alpha", 6: "RGB + alpha"}
+_PNG_XMP_KEYWORD = "XML:com.adobe.xmp"
+
+
+@dataclass
+class _PngExtras:
+    """What a PNG holds besides its text chunks and EXIF."""
+    xmp: bytes | None = None
+    icc: bytes | None = None
+    header: tuple[int, int, int] | None = None     # bit depth, colour type, interlace method
+    modified: tuple[int, ...] | None = None        # tIME: year, month, day, hour, minute, second
+
+
+def _png_metadata(data: bytes, warnings: list[str],
+                  extras: "_PngExtras | None" = None) -> tuple[list[tuple[str, str]], bytes | None]:
+    """Text chunks (``keyword`` or ``keyword@language``) and the EXIF chunk; the XMP packet,
+    the header and the modification time go to ``extras``."""
     texts: list[tuple[str, str]] = []
     exif = None
+    extras = extras if extras is not None else _PngExtras()
     for ctype, body in _png_chunks(data):
-        if ctype == b"tEXt" and b"\x00" in body:
+        if ctype == b"IHDR" and len(body) == 13 and extras.header is None:
+            extras.header = (body[8], body[9], body[12])
+        elif ctype == b"iCCP" and extras.icc is None and b"\x00" in body:
+            _name, _, rest = body.partition(b"\x00")
+            extras.icc = _inflate(rest[1:])
+        elif ctype == b"tIME" and len(body) == 7 and extras.modified is None:
+            extras.modified = (int.from_bytes(body[0:2], "big"), *body[2:7])
+        elif ctype == b"tEXt" and b"\x00" in body:
             kw, _, text = body.partition(b"\x00")
             texts.append((kw.decode("latin-1"), text.decode("latin-1")))
         elif ctype == b"zTXt" and b"\x00" in body:
@@ -693,17 +726,97 @@ def _png_metadata(data: bytes, warnings: list[str]) -> tuple[list[tuple[str, str
             if len(rest) < 2:
                 continue
             compressed, rest = rest[0], rest[2:]
-            _lang, _, rest = rest.partition(b"\x00")
+            lang, _, rest = rest.partition(b"\x00")
             _tkw, _, text = rest.partition(b"\x00")
             if compressed:
                 text = _inflate(text)
                 if text is None:
                     warnings.append(f"PNG iTXt {kw.decode('latin-1')!r} not decoded")
                     continue
-            texts.append((kw.decode("latin-1"), values.decode_text(text, ("utf-8",))))
+            name = kw.decode("latin-1")
+            if name == _PNG_XMP_KEYWORD:
+                if extras.xmp is None:
+                    extras.xmp = text
+                continue
+            tag = lang.decode("ascii", "replace").strip()
+            texts.append((f"{name}@{tag}" if tag else name, values.decode_text(text, ("utf-8",))))
         elif ctype == b"eXIf" and exif is None:
             exif = body
     return texts, exif
+
+
+_JFIF_UNITS = {0: "None (aspect ratio)", 1: "Inches", 2: "Centimeters"}
+_MPF_TYPES = {0x000000: "Undefined", 0x010001: "Large thumbnail (VGA)", 0x010002: "Large thumbnail (full HD)",
+              0x020001: "Multi-frame panorama", 0x020002: "Multi-frame disparity",
+              0x020003: "Multi-frame multi-angle", 0x030000: "Baseline MP primary image"}
+
+
+def _jpeg_structure_fields(state: "_JpegState") -> list[MetadataField]:
+    """Read-only JFIF header, comments, MPF index and ICC profile of a JPEG."""
+    fields: list[MetadataField] = []
+
+    def add(key, label, value, field_type="str", source="jpeg", **extra):
+        fields.append(MetadataField(key, label, value, raw_value=value, editable=False, deletable=False,
+                                    field_type=field_type, source=source, **extra))
+
+    segments = state.jpeg.segments
+    for seg in segments:
+        if seg.is_jfif and seg.payload[:5] == b"JFIF\x00" and len(seg.payload) >= 12:
+            p = seg.payload
+            add("jfif:Version", "JFIF Version", f"{p[5]}.{p[6]:02d}", source="jfif")
+            add("jfif:ResolutionUnit", "JFIF Resolution Unit", _JFIF_UNITS.get(p[7], str(p[7])), source="jfif")
+            add("jfif:XResolution", "JFIF X Resolution", int.from_bytes(p[8:10], "big"), "int", source="jfif")
+            add("jfif:YResolution", "JFIF Y Resolution", int.from_bytes(p[10:12], "big"), "int", source="jfif")
+            break
+    comments = [values.decode_text(seg.payload, ("utf-8",)).rstrip("\x00")
+                for seg in segments if seg.marker == jpeg_segments.COM and seg.payload is not None]
+    if len(comments) == 1:
+        add("jpeg:Comment", "JPEG Comment", comments[0], "text" if "\n" in comments[0] else "str")
+    elif comments:
+        add("jpeg:Comment", "JPEG Comment", comments, "str", multi=True)
+    for seg in segments:
+        if seg.is_mpf:
+            try:
+                index = jpeg_segments.parse_mp_index(seg.payload)
+            except jpeg_segments.MpfError:
+                break
+            add("mpf:NumberOfImages", "MPF Number of Images", len(index.entries), "int", source="mpf")
+            for number, entry in enumerate(index.entries, start=1):
+                kind = entry[0] & 0xFFFFFF
+                add(f"mpf:image{number}:Type", f"MPF Image {number} Type", _MPF_TYPES.get(kind, f"0x{kind:06X}"),
+                    source="mpf")
+                add(f"mpf:image{number}:Size", f"MPF Image {number} Size (bytes)", entry[1], "int",
+                    source="mpf", computed=True)
+            break
+    profile = icc.assemble([s.payload for s in segments if s.is_app(2, b"ICC_PROFILE\x00") and s.payload])
+    if profile is not None:
+        fields += icc.fields(profile)
+    return fields
+
+
+def _png_structure_fields(extras: "_PngExtras") -> list[MetadataField]:
+    """Read-only header and last-modification fields of a PNG."""
+    fields: list[MetadataField] = []
+    if extras.header is not None:
+        depth, color, interlace = extras.header
+        fields += [
+            MetadataField("img:bit_depth", "Bit Depth", depth, editable=False, deletable=False,
+                          field_type="int", source="image"),
+            MetadataField("img:color_type", "PNG Color Type", _PNG_COLOR_TYPES.get(color, str(color)),
+                          editable=False, deletable=False, source="image"),
+            MetadataField("img:interlace", "Interlaced", bool(interlace), editable=False, deletable=False,
+                          field_type="bool", source="image"),
+        ]
+    if extras.modified is not None:
+        year, month, day, hour, minute, second = extras.modified
+        try:
+            stamp = values.format_datetime(datetime(year, month, day, hour, minute, second, tzinfo=timezone.utc))
+        except ValueError:
+            stamp = None
+        if stamp:
+            fields.append(MetadataField("pngchunk:tIME", "PNG Last Modification (UTC)", stamp, editable=False,
+                                        deletable=False, field_type="datetime", source="png"))
+    return fields
 
 
 def _riff_chunks(data: bytes):
@@ -732,6 +845,7 @@ class ImageHandler(BaseMetadataHandler):
         ".jpg", ".jpeg", ".tif", ".tiff",
         ".png", ".bmp", ".gif", ".webp", ".ico",
         ".cr2", ".nef", ".arw", ".dng", ".orf", ".rw2", ".pef", ".srw",
+        ".rwl", ".nrw", ".srf", ".sr2", ".3fr", ".erf", ".mos", ".kdc", ".dcr", ".mef", ".iiq",
     })
     PRIORITY = 10
 
@@ -740,7 +854,8 @@ class ImageHandler(BaseMetadataHandler):
         fields: list[MetadataField] = []
         errors: list[str] = []
         warnings: list[str] = []
-        fields += self._pillow_fields(path, errors)
+        pillow_errors: list[str] = []
+        fields += self._pillow_fields(path, pillow_errors)
         suffix = path.suffix.lower()
         writable = False
         reason = None
@@ -749,23 +864,40 @@ class ImageHandler(BaseMetadataHandler):
         except OSError as exc:
             errors.append(f"read error: {exc}")
             head = b""
+        raw_file = head[:4] in exif_codec.RAW_MAGICS or (suffix in _READ_ONLY_EXTS and bool(pillow_errors))
+        if raw_file and pillow_errors:
+            # The image library does not know this raw format: its properties are simply not shown.
+            warnings.append("Image properties not read: format not supported by the image library")
+        else:
+            errors += pillow_errors
         try:
             if jpeg_segments.is_jpeg(head):
-                writable = suffix in JPEG_EXTS
+                writable = _jpeg_name(path)
                 more, reason = self._jpeg_fields(path, writable, errors, warnings)
                 fields += more
-            elif head[:4] in (b"II*\x00", b"MM\x00*"):
+            elif head[:4] in (b"II*\x00", b"MM\x00*") or head[:4] in exif_codec.RAW_MAGICS:
                 fields += self._tiff_fields(path, errors)
             elif head[:8] == b"\x89PNG\r\n\x1a\n":
-                texts, exif = _png_metadata(path.read_bytes(), warnings)
+                extras = _PngExtras()
+                texts, exif = _png_metadata(path.read_bytes(), warnings, extras)
+                fields += _png_structure_fields(extras)
+                if extras.icc is not None:
+                    fields += icc.fields(extras.icc)
                 fields += [MetadataField(f"png:{k}", k, v, editable=False, deletable=False,
                                          field_type="text" if "\n" in v else "str", source="png")
                            for k, v in texts]
                 if exif is not None:
                     fields += self._exif_bytes_fields(_strip_exif_header(exif), errors)
+                if extras.xmp is not None:
+                    try:
+                        fields += _xmp_fields(xmp.XmpPacket(extras.xmp), False)
+                    except xmp.XmpFormatError as exc:
+                        warnings.append(f"XMP not readable: {exc}")
             elif head[:4] == b"RIFF" and head[8:12] == b"WEBP":
                 for fourcc, body in _riff_chunks(path.read_bytes()):
-                    if fourcc == b"EXIF":
+                    if fourcc == b"ICCP":
+                        fields += icc.fields(body)
+                    elif fourcc == b"EXIF":
                         fields += self._exif_bytes_fields(_strip_exif_header(body), errors)
                     elif fourcc == b"XMP ":
                         try:
@@ -781,7 +913,7 @@ class ImageHandler(BaseMetadataHandler):
             writable = False
         record = self._make_record(path, read_errors=errors, warnings=warnings,
                                    supports_write=writable, supports_delete=writable)
-        if reason and suffix in JPEG_EXTS and not errors:
+        if reason and _jpeg_name(path) and not errors:
             record.read_only_reason = reason
         record.fields = fields
         if not writable or errors:
@@ -846,7 +978,7 @@ class ImageHandler(BaseMetadataHandler):
         reason = state.read_only_reason()
         if reason:
             warnings.append(reason)
-        return _jpeg_dpi(state) + self._state_fields(state, writable and not reason), reason
+        return _jpeg_dpi(state) + _jpeg_structure_fields(state) + self._state_fields(state, writable and not reason), reason
 
     @staticmethod
     def _state_fields(state: _JpegState, writable: bool) -> list[MetadataField]:
@@ -862,11 +994,27 @@ class ImageHandler(BaseMetadataHandler):
     def _tiff_fields(self, path: Path, errors: list[str]) -> list[MetadataField]:
         try:
             with open(path, "rb") as fh, mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-                block = exif_codec.parse(mm, with_ifd1=False)
+                block = exif_codec.parse(mm, with_ifd1=False, raw=True)
         except (exif_codec.ExifFormatError, OSError, ValueError) as exc:
             errors.append(f"EXIF read error: {exc}")
             return []
-        return _exif_fields(block, False)
+        fields = _exif_fields(block, False)
+        entries = block.ifds["0th"]
+        if 34675 in entries:                      # embedded ICC profile
+            fields += icc.fields(entries[34675].data)
+        if 700 in entries:                        # XMP packet (Lightroom, many editors)
+            try:
+                fields += _xmp_fields(xmp.XmpPacket(entries[700].data), False)
+            except xmp.XmpFormatError:
+                pass                              # the raw packet stays visible as its binary field
+        if 33723 in entries:                      # IPTC-NAA (IIM) record
+            try:
+                datasets, _ = iptc.parse_iim(entries[33723].data)
+                utf8 = iptc.charset_marker(datasets) in (None, iptc.UTF8_MARKER)
+                fields += _iptc_fields(SimpleNamespace(iim=datasets, iptc_utf8=utf8), False)
+            except iptc.IptcFormatError:
+                pass
+        return fields
 
     def _exif_bytes_fields(self, data: bytes, errors: list[str]) -> list[MetadataField]:
         try:
@@ -883,7 +1031,7 @@ class ImageHandler(BaseMetadataHandler):
 
     # ── schema ──
     def writable_fields(self, path: Path, record: MetadataRecord) -> list[MetadataField]:
-        if path.suffix.lower() not in JPEG_EXTS or record.read_errors:
+        if not _jpeg_name(path) or record.read_errors:
             return []
         try:
             state = _JpegState.load(Path(path).read_bytes())
@@ -1149,12 +1297,12 @@ class ImageHandler(BaseMetadataHandler):
         state.touched.add("iptc")
 
     def write(self, path: Path, fields: list[MetadataField]) -> None:
-        if path.suffix.lower() not in JPEG_EXTS:
+        if not _jpeg_name(path):
             raise NotImplementedError(f"Metadata write not supported for {path.suffix}")
         self._atomic_write(path, lambda tmp: self.apply_write(tmp, fields))
 
     def delete(self, path: Path, keys: list[str]) -> None:
-        if path.suffix.lower() not in JPEG_EXTS:
+        if not _jpeg_name(path):
             raise NotImplementedError(f"Metadata delete not supported for {path.suffix}")
         self._atomic_write(path, lambda tmp: self.apply_delete(tmp, keys))
 

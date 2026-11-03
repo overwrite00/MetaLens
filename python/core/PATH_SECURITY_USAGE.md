@@ -29,7 +29,7 @@ on the temporary path inside the callback. Hooks must modify only the path they 
 must not open another transaction. Outside the API, `self._atomic_write(path, callback)` (used
 by the public `write`/`delete` wrappers) delegates to the same function.
 
-The callback receives a temporary copy named `<stem>.ml_tmp<suffix>` (original extension kept),
+The callback receives a temporary copy named the same name as the target (inside the private `.metalens-*` directory; `temp_suffix` is kept only for compatibility),
 inside a private `.metalens-*` directory beside the target. It must modify only that copy and
 propagate failures. Never construct predictable temporary names or write directly to the original.
 

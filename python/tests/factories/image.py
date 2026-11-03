@@ -351,7 +351,7 @@ def jpeg_nikon_makernote(tmp_path: Path) -> Path:
     return path
 
 
-@sample("jpeg_mpo", volatile=_JPEG_VOLATILE, mutations=_DATE_MUTATIONS)
+@sample("jpeg_mpo", volatile=_JPEG_VOLATILE + ("mpf:image*:Size",), mutations=_DATE_MUTATIONS)
 def jpeg_mpo(tmp_path: Path) -> Path:
     """Two-frame MPO (APP1 Exif, APP2 MPF, second frame after the first EOI)."""
     path = tmp_path / "stereo.jpg"
@@ -359,7 +359,48 @@ def jpeg_mpo(tmp_path: Path) -> Path:
     return path
 
 
-@sample("photo_no_extension", tags={"read_only"})
+def icc_profile(description: str = "MetaLens test RGB", copyright_text: str = "Public domain") -> bytes:
+    """Minimal valid ICC v2 display profile with ``desc`` and ``cprt`` tags."""
+    def desc(text: str) -> bytes:
+        raw = text.encode("ascii") + bytes(1)
+        body = b"desc" + bytes(4) + struct.pack(">I", len(raw)) + raw + bytes(4 + 4 + 2 + 1 + 67)
+        return body + bytes(-len(body) % 4)
+
+    def text_tag(text: str) -> bytes:
+        body = b"text" + bytes(4) + text.encode("ascii") + bytes(1)
+        return body + bytes(-len(body) % 4)
+
+    tags = [(b"desc", desc(description)), (b"cprt", text_tag(copyright_text))]
+    table_size = 4 + 12 * len(tags)
+    offset = 128 + table_size
+    table, body = struct.pack(">I", len(tags)), b""
+    for signature, data in tags:
+        table += struct.pack(">4sII", signature, offset + len(body), len(data))
+        body += data
+    header = bytearray(128)
+    struct.pack_into(">I", header, 0, 128 + len(table) + len(body))
+    header[8:12] = bytes([2, 0x10, 0, 0])
+    header[12:16], header[16:20], header[20:24] = b"mntr", b"RGB ", b"XYZ "
+    struct.pack_into(">6H", header, 24, 2026, 1, 2, 3, 4, 5)
+    header[36:40], header[40:44] = b"acsp", b"MSFT"
+    struct.pack_into(">I", header, 64, 1)
+    return bytes(header) + table + body
+
+
+@sample("jpeg_icc_comment", volatile=_JPEG_VOLATILE, mutations=_DATE_MUTATIONS)
+def jpeg_icc_comment(tmp_path: Path) -> Path:
+    """JPEG with an ICC profile split in two APP2 segments, two comments and camera EXIF."""
+    profile = icc_profile()
+    half = len(profile) // 2
+    parts = [segment(0xE2, b"ICC_PROFILE" + bytes(1) + bytes([n, 2]) + chunk)
+             for n, chunk in ((1, profile[:half]), (2, profile[half:]))]
+    comments = [segment(0xFE, "First comment é".encode("utf-8")), segment(0xFE, b"Second")]
+    path = tmp_path / "profile.jpg"
+    path.write_bytes(jpeg_with([segment(0xE1, camera_exif(thumbnail=False))] + parts + comments))
+    return path
+
+
+@sample("photo_no_extension", volatile=_JPEG_VOLATILE, mutations=_DATE_MUTATIONS)
 def photo_no_extension(tmp_path: Path) -> Path:
     path = tmp_path / "photo"
     path.write_bytes(jpeg_with([segment(0xE1, camera_exif(thumbnail=False))]))
@@ -378,11 +419,58 @@ def tiff_dpi(tmp_path: Path) -> Path:
     return path
 
 
+@sample("tiff_xmp_iptc", tags={"read_only"})
+def tiff_xmp_iptc(tmp_path: Path) -> Path:
+    """TIFF as saved by an editor: XMP packet (tag 700) and IPTC-NAA record (tag 33723)."""
+    from PIL import Image
+    from PIL.TiffImagePlugin import ImageFileDirectory_v2
+    path = tmp_path / "edited.tif"
+    info = ImageFileDirectory_v2()
+    info[0x010F] = "EditorCo"
+    info.tagtype[700] = 1
+    info[700] = XMP_PACKET.encode("utf-8")
+    info.tagtype[33723] = 7
+    info[33723] = iim(IPTC_DATASETS)
+    Image.new("RGB", (8, 8), (1, 2, 3)).save(path, "TIFF", tiffinfo=info)
+    return path
+
+
 @sample("dng_like", tags={"read_only"})
 def dng_like(tmp_path: Path) -> Path:
     from PIL import Image
     path = tmp_path / "raw.dng"
     Image.new("RGB", (8, 8), (4, 5, 6)).save(path, "TIFF", dpi=(240, 240))
+    return path
+
+
+def le_raw_tiff(magic: bytes, make: bytes, model: bytes) -> bytes:
+    """Little-endian TIFF-like raw file (``magic`` in place of ``II*\0``) with a Make/Model IFD0 and
+    a UTF-8 (Exif 3.0, type 129) ImageDescription."""
+    entries = []
+    body = bytearray()
+    ifd_at, count = 8, 3
+    data_at = ifd_at + 2 + 12 * count + 4
+    for tag, typ, payload in ((0x010E, 129, "Descrizione è".encode("utf-8") + b"\x00"),
+                              (0x010F, 2, make + b"\x00"), (0x0110, 2, model + b"\x00")):
+        entries.append(struct.pack("<HHII", tag, typ, len(payload), data_at + len(body)))
+        body += payload
+    return magic + struct.pack("<I", ifd_at) + struct.pack("<H", count) + b"".join(entries)         + struct.pack("<I", 0) + bytes(body)
+
+
+@sample("orf_like", tags={"read_only"})
+def orf_like(tmp_path: Path) -> Path:
+    """Olympus-style raw: big-endian EXIF structure under the ``MMOR`` header."""
+    path = tmp_path / "photo.orf"
+    tiff = camera_exif(thumbnail=False)[6:]
+    path.write_bytes(b"MMOR" + tiff[4:])
+    return path
+
+
+@sample("rw2_like", tags={"read_only"})
+def rw2_like(tmp_path: Path) -> Path:
+    """Panasonic-style raw: little-endian IFD0 under the ``IIU\0`` header."""
+    path = tmp_path / "photo.rw2"
+    path.write_bytes(le_raw_tiff(b"IIU\x00", b"Panasonic", b"DC-Test"))
     return path
 
 
@@ -395,6 +483,8 @@ def png_text_exif(tmp_path: Path) -> Path:
     info.add_text("Title", "PNG title")
     info.add_text("Comment", "compressed comment " * 4, zip=True)
     info.add_itxt("Description", "Descrizione è 日本", lang="it", tkey="Beschreibung")
+    info.add_itxt("Description", "Description", lang="en", tkey="Description")
+    info.add_itxt("XML:com.adobe.xmp", XMP_PACKET)
     exif = camera_exif(gps=False, thumbnail=False)
     Image.new("RGB", (8, 8), (7, 8, 9)).save(path, "PNG", pnginfo=info, exif=exif)
     return path

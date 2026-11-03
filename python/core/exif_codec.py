@@ -35,7 +35,8 @@ import piexif
 from core import values
 from core.errors import ErrorCode, MetadataValueError
 
-TYPE_SIZES = {1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 6: 1, 7: 1, 8: 2, 9: 4, 10: 8, 11: 4, 12: 8, 13: 4}
+# 129 = UTF-8 text (Exif 3.0): read as text, kept byte for byte on a rewrite.
+TYPE_SIZES = {1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 6: 1, 7: 1, 8: 2, 9: 4, 10: 8, 11: 4, 12: 8, 13: 4, 129: 1}
 _INT_FORMATS = {1: "B", 3: "H", 4: "L", 6: "b", 8: "h", 9: "l", 13: "L"}
 _INT_RANGES = {1: (0, 255), 3: (0, 65535), 4: (0, 2**32 - 1), 6: (-128, 127),
                8: (-32768, 32767), 9: (-2**31, 2**31 - 1), 13: (0, 2**32 - 1)}
@@ -222,15 +223,22 @@ def spec_type(ifd: str, tag: int) -> int | None:
 
 # ──────────────────────── parse ──────────────────────────────────────────────
 
-def parse(tiff: bytes, *, with_ifd1: bool = True) -> ExifBlock:
+# Magic of TIFF-based raw files whose IFDs are laid out like TIFF (Olympus ORF, Panasonic RW2/RWL).
+RAW_MAGICS = {b"IIRO": "<", b"IIRS": "<", b"MMOR": ">", b"IIU\x00": "<"}
+
+
+def parse(tiff: bytes, *, with_ifd1: bool = True, raw: bool = False) -> ExifBlock:
     """Parse a TIFF structure (``Exif\\0\\0`` already stripped).
+
+    ``raw=True`` also accepts the headers of ORF/RW2 raw files (read only: such a
+    block is never rewritten).
 
     Raises ``ExifFormatError`` and nothing else, whatever the input bytes: a
     malformed block is a read error of the caller, never an unhandled exception.
     """
     view = tiff if isinstance(tiff, memoryview) else memoryview(tiff)
     try:
-        return _parse(view, with_ifd1)
+        return _parse(view, with_ifd1, raw)
     except ExifFormatError:
         raise
     except (struct.error, IndexError, KeyError, ValueError, TypeError, OverflowError) as exc:
@@ -248,7 +256,7 @@ def _pointer_value(entry: Entry, bo: str, what: str) -> int:
     return struct.unpack(bo + _INT_FORMATS[entry.type], entry.data)[0]
 
 
-def _parse(data: memoryview, with_ifd1: bool) -> ExifBlock:
+def _parse(data: memoryview, with_ifd1: bool, raw: bool = False) -> ExifBlock:
     size = len(data)
     if size < 8:
         raise ExifFormatError("EXIF block too short")
@@ -257,6 +265,8 @@ def _parse(data: memoryview, with_ifd1: bool) -> ExifBlock:
         bo = "<"
     elif head == b"MM\x00*":
         bo = ">"
+    elif raw and head in RAW_MAGICS:
+        bo = RAW_MAGICS[head]
     else:
         raise ExifFormatError("invalid TIFF header")
     block = ExifBlock(bo)
@@ -513,6 +523,8 @@ def decode(ifd: str, tag: int, entry: Entry, bo: str) -> Decoded:
         except UnicodeDecodeError:
             return binary
         return Decoded("str", text.rstrip("\x00"), editable=editable, kind="xp")
+    if t == 129:
+        return Decoded("str", values.decode_text(entry.data.rstrip(b"\x00"), ("utf-8",)), editable=False, kind="utf8")
     if t == 2:
         raw = entry.data.rstrip(b"\x00")
         if where in DATETIME_TAGS:
@@ -670,7 +682,7 @@ def _encode_utf16(key: str, text: str, encoding: str) -> bytes:
 
 def swap_entry(entry: Entry, bo_from: str, bo_to: str) -> Entry:
     """Same entry in another byte order (snapshot restored into a block with another order)."""
-    if bo_from == bo_to or entry.type in (1, 2, 6, 7) or entry.type not in TYPE_SIZES:
+    if bo_from == bo_to or entry.type in (1, 2, 6, 7, 129) or entry.type not in TYPE_SIZES:
         return entry
     fmt = {3: "H", 4: "L", 5: "LL", 8: "h", 9: "l", 10: "ll", 11: "f", 12: "d", 13: "L"}[entry.type]
     vals = struct.unpack(bo_from + fmt * entry.count, entry.data)

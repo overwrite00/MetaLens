@@ -31,7 +31,7 @@ remain public wrappers that open their own transaction (`_atomic_write`).
    READONLY attribute) or no temporary directory can be created beside it.
 2. Serialize in-process writers and create an exclusively allocated private temporary
    directory (`.metalens-*`) on the same filesystem as the target.
-3. Copy the file (`<stem>.ml_tmp<suffix>`). On Windows, clear HIDDEN/SYSTEM/READONLY on the
+3. Copy the file (same name as the target, inside the private directory). On Windows, clear HIDDEN/SYSTEM/READONLY on the
    copy while the callback runs (libraries recreate files by name, which Windows refuses for
    hidden files).
 4. Validate and apply all changes to the copy, then read it back: written keys must hold the

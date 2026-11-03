@@ -355,7 +355,8 @@ def secure_atomic_write(
     Args:
         target_path: Path object of the file to write (must exist and be writable)
         write_fn: Callable that takes (Path) and performs write operations
-        temp_suffix: Suffix for temporary file name (default: ".ml_tmp")
+        temp_suffix: Kept for compatibility (validated, no longer part of the name:
+            the copy is called like the target inside the private directory)
 
     Examples:
         >>> def writer(tmp_path):
@@ -389,7 +390,9 @@ def secure_atomic_write(
         committed = False
         warnings: list[str] = []
         try:
-            temp_path = directory / (target.stem + temp_suffix + target.suffix)
+            # Same name as the target: handlers that decide by name or extension behave
+            # on the copy exactly as on the file (the directory is private and new).
+            temp_path = directory / target.name
             _retry_transient(lambda: shutil.copy2(target, temp_path), busy=_SHARING_ERRORS,
                              retry_denied=True, what="The file", probe=target if windows else None)
             if original_attrs is not None:

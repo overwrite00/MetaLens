@@ -13,6 +13,35 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - [ ] **Batch Edit** — Apply a field change to multiple selected files at once
 - [ ] **Search/Filter Bar** — Filter the file list by name or extension
 
+### Added
+- **Privacy indicators.** Every field is classified by what it can reveal when the file is shared (location,
+  identity, device, dates, software, thumbnail, free text). The metadata views show a badge on each sensitive
+  field and a line summarizing what sharing the file would reveal. The API exposes `sensitivity` per field and
+  `sensitivity_summary` per file.
+- **Video and audio structure (MP4, MOV, M4A).** Brand, creation and modification dates, track list (type,
+  language, size, rotation, codec, frame rate, sample rate, channels), QuickTime keys (including the location
+  and device written by phones), text atoms and the XMP packet, all read-only (`qt:` fields).
+- **HEIC, HEIF and AVIF** images: size, rotation, EXIF, GPS, XMP and ICC profile (read-only).
+- **PNG:** XMP is now shown as regular `xmp:` fields; image header (bit depth, colour type, interlace), last
+  modification time and ICC profile.
+- **TIFF and DNG:** embedded XMP, IPTC and ICC profile.
+- **JPEG:** JFIF header, comments, Multi-Picture index and ICC profile (read-only).
+- **RAW:** Olympus ORF and Panasonic RW2/RWL files are read, as well as more TIFF-based RAW extensions.
+- **OpenDocument (ODT, ODS, ODP, ODG) and EPUB** metadata (read-only).
+- **PDF:** version and linearization are shown.
+- **Audio:** MPEG layer/version/channel mode/bitrate mode/encoder, FLAC stream details, encoder vendor of
+  Vorbis files; pictures and general objects show their type and description.
+- **Files without an extension** are recognized from their content and handled like their format (a JPEG
+  named `photo` can now be read and edited like a `.jpg`).
+
+### Changed
+- Keys: `png:XML:com.adobe.xmp` is replaced by the `xmp:` fields it contains; PNG text in several languages
+  is `png:<keyword>@<language>` instead of `png:<keyword>#2`; files without an extension use their format's
+  keys (e.g. `exif:*`) instead of `hachoir:*`.
+- The temporary copy used while saving now has the same name as the file (inside the private temporary folder).
+- A tag editor that cannot open a movie shows its structure read-only instead of reporting a read error.
+- An Exif 3.0 UTF-8 text tag no longer makes the whole EXIF block non-rewritable.
+
 ---
 
 ## [0.4.1] — 2026-11-03

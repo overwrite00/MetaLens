@@ -100,15 +100,22 @@ def test_wav_renamed_bin_is_read_by_hachoir_from_content(tmp_path):
     assert any(f.key.startswith("hachoir:") for f in record.fields)
 
 
-def test_jpeg_without_extension_is_read_by_hachoir_from_content(tmp_path):
+def test_jpeg_without_extension_is_handled_as_jpeg_from_content(tmp_path):
     from PIL import Image
     path = tmp_path / "photo"
     Image.new("RGB", (8, 6)).save(path, "JPEG")
     handler = HandlerRegistry.get(path)
-    assert handler.NAME == "hachoir"
+    assert handler.NAME == "image"
     record = handler.read(path)
     assert record.read_errors == []
-    assert any(f.key.startswith("hachoir:") for f in record.fields)
+    assert record.format_supports_write
+    assert not any(f.key.startswith("hachoir:") for f in record.fields)
+
+
+def test_unrecognized_file_without_extension_still_goes_to_hachoir(tmp_path):
+    path = tmp_path / "noextension"
+    path.write_bytes(b"7" * 32)
+    assert HandlerRegistry.get(path).NAME == "hachoir"
 
 
 @pytest.mark.asyncio

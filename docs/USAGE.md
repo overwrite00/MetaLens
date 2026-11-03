@@ -47,6 +47,7 @@ The **center panel** (`FilePanel`) shows every file in the currently selected fo
 The **detail panel** (`DetailPanel`) opens on the **Metadata** tab by default, showing a read-only table (`MetadataTable`) of every field MetaLens extracted, grouped by source (`exif`, `gps`, `xmp`, `iptc`, `id3`, `vorbis`, `mp4`, `pdf`, `office`, `hachoir`, `filesystem`, …).
 
 - Multi-valued fields (artists, keywords, …) are shown as lists, never joined into one string.
+- A line above the table tells what sharing the file would reveal (location, identity, device, dates...), and each sensitive field carries a badge with its category.
 - Binary values (cover art, pictures, MakerNote, thumbnails) are shown as size, MIME type and SHA-256, not as their bytes.
 - Notices above the table explain why the format metadata is read-only (e.g. signed PDF, AAC, legacy Office), report read errors and show warnings (e.g. an EXIF MakerNote that is moved on rewrite, duplicated metadata segments).
 
@@ -129,5 +130,5 @@ The preferences (auto-check on/off, ignored version) are stored in `settings.jso
 
 ---
 
-*Last updated: 2026-11-02*
+*Last updated: 2026-11-03*
 *← [Installation](./INSTALLATION.md) | [API Reference →](./API.md)*

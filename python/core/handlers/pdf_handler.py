@@ -387,6 +387,25 @@ def _attributed(exc: MetadataValueError, key: str) -> MetadataValueError:
 
 # ──────────────────────── handler ────────────────────────────────────────────
 
+def _file_structure_fields(path: Path) -> list[MetadataField]:
+    """Version of the file header and whether it is linearized (computed: a rewrite changes them)."""
+    try:
+        with open(path, "rb") as stream:
+            head = stream.read(2048)
+    except OSError:
+        return []
+    out: list[MetadataField] = []
+    start = head.find(b"%PDF-")
+    if start >= 0:
+        version = head[start + 5:start + 8].decode("ascii", "replace")
+        if len(version) == 3 and version[0].isdigit() and version[1] == "." and version[2].isdigit():
+            out.append(MetadataField("pdf:PDFVersion", "PDF Version", version, raw_value=version, editable=False,
+                                     deletable=False, field_type="str", source="pdf", computed=True))
+    out.append(MetadataField("pdf:Linearized", "Linearized", b"/Linearized" in head, editable=False,
+                             deletable=False, field_type="bool", source="pdf", computed=True))
+    return out
+
+
 class PdfHandler(BaseMetadataHandler):
     NAME = "pdf"
     EXTENSIONS = frozenset({".pdf"})
@@ -434,6 +453,7 @@ class PdfHandler(BaseMetadataHandler):
                 warning = _xmp_of(reader.trailer["/Root"].get_object())[2]
                 if warning:
                     warnings.append(warning)
+            fields += _file_structure_fields(path)
             fields.append(MetadataField("pdf:page_count", "Page Count", len(reader.pages),
                                         editable=False, deletable=False, field_type="int", source="pdf"))
             fields.append(MetadataField("pdf:encrypted", "Encrypted", encrypted,
