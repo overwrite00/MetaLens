@@ -28,6 +28,7 @@ HANDLER_BY_FORMAT: dict[str, str] = {
     "asf": "audio", "ape": "audio", "wavpack": "audio", "musepack": "audio",
     "heif": "heif", "avif": "heif",
     "odf": "odf", "epub": "epub",
+    "cr3": "image", "raf": "image",
     "pdf": "pdf", "ooxml": "office", "ole": "ole",
 }
 
@@ -112,6 +113,8 @@ def detect(path: Path, head: bytes | None = None) -> str | None:
         return "ogg"
     if head[:16] == _ASF_GUID:
         return "asf"
+    if head[:15] == b"FUJIFILMCCD-RAW":
+        return "raf"
     if head[:4] == b"MAC ":
         return "ape"
     if head[:4] == b"wvpk":

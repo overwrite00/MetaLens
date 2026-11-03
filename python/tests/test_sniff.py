@@ -74,7 +74,7 @@ def test_handler_names():
     assert sniff.handler_name("jpeg") == "image"
     assert sniff.handler_name("mkv") == "video"
     assert sniff.handler_name("heif") == "heif" and sniff.handler_name("avif") == "heif"
-    assert sniff.handler_name("cr3") is None       # no handler yet
+    assert sniff.handler_name("cr3") == "image" and sniff.handler_name("raf") == "image"
     assert sniff.handler_name(None) is None
 
 

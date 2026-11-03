@@ -73,21 +73,24 @@ def add_full_tags(path: Path) -> None:
     mp4.save()
 
 
-@sample("m4a_tags")
+_LOCATION = {"qt:mdta:com.apple.quicktime.location.ISO6709": "+10.0000+020.0000/", "qt:udta:©xyz": "+10.0000+020.0000/"}
+
+
+@sample("m4a_tags", mutations=_LOCATION)
 def m4a_tags(tmp_path: Path) -> Path:
     path = write_mp4(tmp_path / "song.m4a")
     add_full_tags(path)
     return path
 
 
-@sample("mp4_tags")
+@sample("mp4_tags", mutations=_LOCATION)
 def mp4_tags(tmp_path: Path) -> Path:
     path = write_mp4(tmp_path / "clip.mp4", brand=b"isom")
     add_full_tags(path)
     return path
 
 
-@sample("mov")
+@sample("mov", mutations=_LOCATION)
 def mov(tmp_path: Path) -> Path:
     return write_mp4(tmp_path / "movie.mov", brand=b"qt  ")
 
@@ -187,7 +190,7 @@ def write_phone_movie(path: Path, full_box_meta: bool = True) -> Path:
     return path
 
 
-@sample("mov_full")
+@sample("mov_full", mutations=_LOCATION)
 def mov_full(tmp_path: Path) -> Path:
     path = write_phone_movie(tmp_path / "phone.mov")
     add_full_tags(path)

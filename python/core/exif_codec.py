@@ -106,6 +106,8 @@ ADDABLE = (
     ("0th", 0x010E), ("0th", 0x010F), ("0th", 0x0110), ("0th", 0x0131), ("0th", 0x013B),
     ("0th", 0x8298), ("0th", 0x0132), ("Exif", 0x9003), ("Exif", 0x9004), ("0th", 0x0112),
     ("Exif", 0x9286), *sorted(XP_TAGS),
+    # position: reference letters, coordinates (degrees, minutes, seconds) and altitude
+    ("GPS", 0x0001), ("GPS", 0x0002), ("GPS", 0x0003), ("GPS", 0x0004), ("GPS", 0x0005), ("GPS", 0x0006),
 )
 
 _BINARY_COUNT_LIMIT = 64

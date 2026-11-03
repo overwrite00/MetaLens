@@ -259,7 +259,7 @@ def _udta(rd: Reader, moov: Box, out: list[MetadataField]) -> None:
         out.append(_field(f"qt:udta:{name}", f"QuickTime {name}", text.rstrip("\x00"), "str"))
 
 
-def _xmp(rd: Reader, moov: Box | None, out: list[MetadataField], warnings: list[str]) -> None:
+def _xmp(rd: Reader, moov: Box | None, out: list[MetadataField], warnings: list[str], writable: bool = False) -> None:
     from core import xmp
     from core.handlers.image_handler import _xmp_fields
     packets = [b for b in rd.children() if b.type == b"uuid" and b.usertype == _XMP_UUID]
@@ -269,12 +269,12 @@ def _xmp(rd: Reader, moov: Box | None, out: list[MetadataField], warnings: list[
             packets += [b for b in rd.children(udta.data_start, udta.end) if b.type == b"XMP_"]
     for box in packets[:1]:
         try:
-            out.extend(_xmp_fields(xmp.XmpPacket(rd.payload(box)), False))
+            out.extend(_xmp_fields(xmp.XmpPacket(rd.payload(box)), writable))
         except xmp.XmpFormatError as exc:
             warnings.append(f"XMP not readable: {exc}")
 
 
-def qt_fields(path: Path) -> tuple[list[MetadataField], list[str]]:
+def qt_fields(path: Path, xmp_writable: bool = False) -> tuple[list[MetadataField], list[str]]:
     """Structure fields of an MP4-family file and the notices to show with them."""
     out: list[MetadataField] = []
     warnings: list[str] = []
@@ -287,7 +287,7 @@ def qt_fields(path: Path) -> tuple[list[MetadataField], list[str]]:
                 _track(rd, trak, out)
             _mdta(rd, moov, out)
             _udta(rd, moov, out)
-        _xmp(rd, moov, out, warnings)
+        _xmp(rd, moov, out, warnings, xmp_writable)
     if any(f.key in ("qt:CreateDate", "qt:ModifyDate") for f in out):
         warnings.append("QuickTime dates are UTC by specification, but many cameras store local time there.")
     return out, warnings

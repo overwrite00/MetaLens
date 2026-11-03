@@ -71,11 +71,11 @@ def write_epub(path: Path) -> Path:
     return path
 
 
-@sample("odt_meta", tags={"read_only"})
+@sample("odt_meta")
 def odt_meta(tmp_path: Path) -> Path:
     return write_odf(tmp_path / "report.odt")
 
 
-@sample("epub_book", tags={"read_only"})
+@sample("epub_book")
 def epub_book(tmp_path: Path) -> Path:
     return write_epub(tmp_path / "book.epub")

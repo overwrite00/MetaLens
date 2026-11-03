@@ -128,7 +128,7 @@ def pdf_basic(tmp_path: Path) -> Path:
     return _save(writer, tmp_path / "basic.pdf")
 
 
-@sample("pdf_xmp")
+@sample("pdf_xmp", volatile=("pdf:@xmp", "xmp:*"))
 def pdf_xmp(tmp_path: Path) -> Path:
     writer = new_writer()
     set_info(writer, {

@@ -120,22 +120,29 @@ Explore the sidecar API in [API.md](docs/API.md).
 | Category | Formats | Read | Write |
 |---|---|---|---|
 | Images | JPEG — EXIF/GPS, XMP, IPTC-IIM (also JFIF header, comments, Multi-Picture index and ICC profile, read-only) | ✅ | ✅ |
-| Images | TIFF (EXIF, XMP, IPTC, ICC), PNG (text, `eXIf`, XMP, ICC, header), WebP (EXIF, XMP, ICC), GIF (comment), BMP, ICO | ✅ | — |
-| Images | HEIC, HEIF, AVIF — size, rotation, EXIF/GPS, XMP, ICC | ✅ | — |
-| Images (RAW) | CR2, NEF, ARW, DNG, ORF, RW2, RWL, PEF, SRW and other TIFF-based RAW (EXIF, XMP, IPTC) | ✅ | — |
+| Images | PNG (text, `eXIf`, XMP, ICC, header), WebP (EXIF, XMP, ICC), TIFF (EXIF, XMP, IPTC, ICC) — EXIF/XMP can be edited and added, PNG text and the IPTC record of a TIFF removed | ✅ | ✅ |
+| Images | GIF (comment), BMP, ICO | ✅ | — |
+| Images | HEIC, HEIF, AVIF — size, rotation, EXIF/GPS, XMP, ICC (EXIF/XMP edited, added and removed in place) | ✅ | ✅ |
+| Images (RAW) | CR2, NEF, ARW, DNG, ORF, RW2, RWL, PEF, SRW and other TIFF-based RAW (EXIF, XMP, IPTC) — changes are experimental and never move existing data | ✅ | ✅ |
+| Images (RAW) | Canon CR3 and Fujifilm RAF (EXIF, GPS, preview metadata) | ✅ | — |
 | Audio | MP3, WAV, AIFF, TTA (ID3) · FLAC, OGG, OGA, Opus, SPX (Vorbis comments) · WMA (ASF) · APE, WV, MPC (APEv2) · M4A (MP4 atoms) | ✅ | ✅ |
 | Audio | AAC (ADTS/ADIF) | ✅ | — |
-| Video | MP4, M4V, MOV, M4B, M4R (MP4 atoms; read-only structure: brand, dates, tracks, rotation, codec, frame rate, QuickTime keys incl. location, XMP) | ✅ | ✅ |
-| Video | MKV, WebM, AVI, WMV, FLV, TS, MTS, M2TS (via hachoir) | ✅ | — |
-| Documents | PDF — document info + XMP (not encrypted, not digitally signed) | ✅ | ✅ |
-| Office | DOCX, XLSX, PPTX, DOCM, XLSM, PPTM — core properties (not digitally signed); `app.xml`/`custom.xml` read-only | ✅ | ✅ |
-| OpenDocument | ODT, ODS, ODP, ODG and templates (`meta.xml`) | ✅ | — |
-| E-books | EPUB (package metadata) | ✅ | — |
+| Video | MP4, M4V, MOV, M4B, M4R (MP4 atoms; structure: brand, dates, tracks, rotation, codec, frame rate; dates, location, device and text entries and XMP can be edited, added and removed) | ✅ | ✅ |
+| Video | MKV, WebM, MKA (title, tags, attachments, tracks; removed or rewritten in place) | ✅ | ✅ |
+| Video | AVI, WMV, FLV, TS, MTS, M2TS (via hachoir) | ✅ | — |
+| Documents | PDF — document info + XMP (the XMP stream can be removed as a whole; not encrypted, not digitally signed) | ✅ | ✅ |
+| Office | DOCX, XLSX, PPTX, DOCM, XLSM, PPTM — core properties (not digitally signed); `app.xml`/`custom.xml` values can be removed | ✅ | ✅ |
+| OpenDocument | ODT, ODS, ODP, ODG and templates (`meta.xml`) | ✅ | ✅ |
+| E-books | EPUB (package metadata; identifier, title and language stay) | ✅ | ✅ |
 | Office (legacy) | DOC, XLS, PPT, DOT, XLT, POT (OLE property sets) | ✅ | — |
 | Any file | Filesystem: `fs:mtime` writable; size, other timestamps, permissions/owner (POSIX), Windows attributes read-only; xattr (Linux: `user.` writable; macOS: read-only) | ✅ | ✅ (mtime, xattr) |
 | Other | Many more formats recognized from their content via hachoir | ✅ | — |
 
-Files without an extension are recognized from their content.
+Files without an extension are recognized from their content. Every change is verified (the picture, audio or video data must come out identical) and can be undone.
+
+### 🛡️ Sharing files safely
+
+The **Share** tab removes what a file reveals before you send it (location, identity, device, dates, software, thumbnails, edit history), with a preview and Undo. The **Batch** button of the file list does the same on many files and also shifts dates, copies metadata between files, adds a position (fixed or from a GPX track), renames from metadata and exports a folder to CSV or JSON.
 
 ### 🔑 File Integrity
 

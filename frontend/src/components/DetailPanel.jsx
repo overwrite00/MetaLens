@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Eye, Pencil, GitCompare, AlertTriangle, ShieldCheck, Copy, Check, Hash } from 'lucide-react'
+import { Eye, Pencil, Share2, GitCompare, AlertTriangle, ShieldCheck, Copy, Check, Hash } from 'lucide-react'
 import { Spinner } from './ui/Spinner'
 import { MetadataTable } from './MetadataTable'
 import { RecordNotices } from './RecordNotices'
 import { MetadataEditor } from './MetadataEditor'
+import { SharePanel } from './SharePanel'
 import { DiffView } from './DiffView'
 import { metalens } from '../api/client'
 
@@ -112,6 +113,7 @@ function HashSection({ filePath }) {
 const TABS = [
   { id: 'view', label: 'Metadata', Icon: Eye },
   { id: 'edit', label: 'Edit',     Icon: Pencil },
+  { id: 'share', label: 'Share',    Icon: Share2 },
   { id: 'diff', label: 'Diff',     Icon: GitCompare },
 ]
 
@@ -199,6 +201,17 @@ export function DetailPanel({ filePath, filePathB, onUndoPush, runExclusive, mut
         )}
         {!loading && !error && filePath && tab === 'edit' && (
           <MetadataEditor
+            key={filePath}
+            record={record}
+            filePath={filePath}
+            onSaved={() => setRevision(value => value + 1)}
+            onUndoPush={onUndoPush}
+            runExclusive={runExclusive}
+            mutationBusy={mutationBusy}
+          />
+        )}
+        {!loading && !error && filePath && tab === 'share' && (
+          <SharePanel
             key={filePath}
             record={record}
             filePath={filePath}

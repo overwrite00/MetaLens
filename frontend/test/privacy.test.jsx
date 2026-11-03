@@ -45,3 +45,25 @@ describe('privacy indicators', () => {
     expect(screen.getAllByText('Location').length).toBeGreaterThanOrEqual(2)
   })
 })
+
+describe('search', () => {
+  test('finds a field by its key, its label, its value or another name', async () => {
+    const { fireEvent } = await import('@testing-library/react')
+    const list = [
+      { ...f('exif:DateTimeOriginal', 'datetime'), value: '2026-01-02T03:04:05', label: 'DateTimeOriginal' },
+      { ...f('exif:Make', 'device'), value: 'Canon' },
+      { ...f('exif:ISOSpeedRatings', null), value: 200, label: 'ISOSpeedRatings' },
+    ]
+    render(<MetadataTable fields={list} />)
+    const search = screen.getByLabelText('Search fields')
+    fireEvent.change(search, { target: { value: 'date taken' } })          // another name
+    expect(screen.queryByText('DateTimeOriginal')).toBeTruthy()
+    expect(screen.queryByText('Make')).toBeNull()
+    fireEvent.change(search, { target: { value: 'canon' } })               // a value
+    expect(screen.queryByText('Make')).toBeTruthy()
+    fireEvent.change(search, { target: { value: 'iso' } })
+    expect(screen.queryByText('ISOSpeedRatings')).toBeTruthy()
+    fireEvent.change(search, { target: { value: 'zzz' } })
+    expect(screen.getByText('No field matches')).toBeTruthy()
+  })
+})

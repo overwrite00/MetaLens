@@ -66,12 +66,12 @@ def write_heif(path: Path, major: bytes = b"heic", compatible: tuple[bytes, ...]
     return path
 
 
-@sample("heic_camera", tags={"read_only"})
+@sample("heic_camera", volatile=("heif:*",))
 def heic_camera(tmp_path: Path) -> Path:
     return write_heif(tmp_path / "IMG_0001.heic")
 
 
-@sample("avif_basic", tags={"read_only"})
+@sample("avif_basic")
 def avif_basic(tmp_path: Path) -> Path:
     return write_heif(tmp_path / "photo.avif", major=b"avif", compatible=(b"avif", b"mif1", b"miaf"),
                       with_icc=False, rotation=0)

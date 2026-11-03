@@ -125,7 +125,7 @@ def avi_two_streams(tmp_path: Path) -> Path:
     return path
 
 
-@sample("mkv_two_tracks")
+@sample("mkv_two_tracks", mutations={"mkv:Info:Title": "T", "mkv:Info:MuxingApp": "M", "mkv:Info:WritingApp": "W"})
 def mkv_two_tracks(tmp_path: Path) -> Path:
     path = tmp_path / "clip.mkv"
     path.write_bytes(mkv_bytes())

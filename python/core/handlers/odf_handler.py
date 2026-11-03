@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import re
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from zipfile import BadZipFile, ZipFile
 
 from core import values
 from core.base_handler import BaseMetadataHandler
+from core.handlers.xml_package import Mutations
 from core.models import MetadataField, MetadataRecord
 from core.zipxml import PackageError, local, read_xml
 
@@ -86,10 +88,73 @@ def meta_fields(root, warnings: list[str]) -> list[MetadataField]:
     return ordered + fields
 
 
-class OdfHandler(BaseMetadataHandler):
+_EDITABLE = {"title", "subject", "description", "creator", "initial-creator", "language", "generator", "keyword",
+             "creation-date", "date", "print-date", "editing-cycles"}
+
+
+def _meta_node(root):
+    return next((c for c in root if local(c.tag) == "meta"), None)
+
+
+def _name_of(node) -> tuple[str, str]:
+    return node.tag[1:].partition("}")[::2] if node.tag.startswith("{") else ("", node.tag)
+
+
+class OdfHandler(Mutations, BaseMetadataHandler):
     NAME = "odf"
     EXTENSIONS = frozenset({".odt", ".ods", ".odp", ".odg", ".odf", ".ott", ".ots", ".otp", ".otg"})
     PRIORITY = 16
+
+    # ── where a key lives in meta.xml ──
+    def part_name(self, archive) -> str:
+        return "meta.xml"
+
+    def locate(self, root, key: str) -> list[tuple]:
+        meta = _meta_node(root)
+        short = key[len("odf:"):] if key.startswith("odf:") else key
+        hits = []
+        for node in (meta if meta is not None else []):
+            ident = _name_of(node)
+            if ident in _TEXT and _TEXT[ident][0] == short or ident in _DATES and _DATES[ident][0] == short \
+                    or ident == (NS_META, short) and short in ("editing-cycles", "editing-duration"):
+                hits.append((meta, node, None))
+            elif ident == (NS_META, "document-statistic") and short.startswith("stat."):
+                attribute = next((a for a in node.attrib if a.rsplit("}", 1)[-1] == short[5:]), None)
+                if attribute is not None:
+                    hits.append((meta, node, attribute))
+            elif ident == (NS_META, "user-defined") and short.startswith("custom.") \
+                    and next((v for k, v in node.attrib.items() if local(k) == "name"), None) == short[7:]:
+                hits.append((meta, node, None))
+        return hits
+
+    def make(self, root, key: str, value) -> list:
+        meta = _meta_node(root)
+        short = key[len("odf:"):]
+        if meta is None:
+            return []
+        values_ = value if isinstance(value, list) else [value]
+        if short.startswith("custom."):
+            elements = [ET.Element("{%s}user-defined" % NS_META, {"{%s}name" % NS_META: short[7:]})]
+            elements[0].text = str(values_[0])
+            return [(meta, e) for e in elements]
+        for (uri, name), (text_key, _label, _multi) in _TEXT.items():
+            if text_key == short:
+                made = []
+                for v in values_:
+                    element = ET.Element("{%s}%s" % (uri, name))
+                    element.text = str(v)
+                    made.append((meta, element))
+                return made
+        for (uri, name), (date_key, _label) in _DATES.items():
+            if date_key == short:
+                element = ET.Element("{%s}%s" % (uri, name))
+                element.text = str(values_[0])
+                return [(meta, element)]
+        if short == "editing-cycles":
+            element = ET.Element("{%s}editing-cycles" % NS_META)
+            element.text = str(values_[0])
+            return [(meta, element)]
+        return []
 
     def read(self, path: Path) -> MetadataRecord:
         fields: list[MetadataField] = []
@@ -106,15 +171,40 @@ class OdfHandler(BaseMetadataHandler):
                     warnings.append("Digitally signed document")
         except (BadZipFile, PackageError, OSError) as exc:
             errors.append(f"ODF read error: {exc}")
+        signed = any("signed" in w for w in warnings)
+        writable = not errors and not signed
+        for f in fields:
+            short = f.key[len("odf:"):]
+            f.deletable = writable
+            f.editable = writable and (short in _EDITABLE or (short.startswith("custom.") and f.field_type == "str"))
         record = self._make_record(path, read_errors=errors, warnings=warnings,
-                                   supports_write=False, supports_delete=False)
+                                   supports_write=writable, supports_delete=writable)
         record.fields = fields
-        record.read_only_reason = "Metadata of OpenDocument files is read-only for now"
+        if not writable and not errors:
+            record.read_only_reason = "Digitally signed document: editing would invalidate the signature"
         record.dedupe_keys()
         return record
 
+    def writable_fields(self, path: Path, record) -> list[MetadataField]:
+        if not record.format_supports_write or record.read_errors:
+            return []
+        present = {f.key for f in record.fields}
+        return [MetadataField(f"odf:{key}", label, None, source="odf",
+                              field_type="localdatetime" if key in ("creation-date", "date", "print-date") else
+                              "int" if key == "editing-cycles" else "str", multi=multi)
+                for (_uri, _name), (key, label, multi) in _TEXT.items() if f"odf:{key}" not in present]
+
+    def canonical(self, field: MetadataField, value):
+        from core import values
+        result = values.canonicalize(field, value)
+        for item in (result if isinstance(result, list) else [result]):
+            if isinstance(item, str) and "\x00" in item:
+                from core.errors import ErrorCode, MetadataValueError
+                raise MetadataValueError(field.key, ErrorCode.INVALID_VALUE, f"{field.key}: NUL is not allowed")
+        return result
+
     def write(self, path: Path, fields: list[MetadataField]) -> None:
-        raise NotImplementedError("OpenDocument metadata is read-only for now")
+        self._atomic_write(path, lambda tmp: self.apply_write(tmp, fields))
 
     def delete(self, path: Path, keys: list[str]) -> None:
-        raise NotImplementedError("OpenDocument metadata is read-only for now")
+        self._atomic_write(path, lambda tmp: self.apply_delete(tmp, keys))

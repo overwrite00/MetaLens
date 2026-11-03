@@ -67,7 +67,9 @@ def test_tiff_xmp_and_iptc_are_interpreted(tmp_path):
     assert keys["xmp:dc:title"].value == "Titolo è"
     assert keys["xmp:dc:creator"].value == ["Ada"]
     assert any(k.startswith("iptc:") for k in keys)
-    assert not any(f.editable or f.deletable for f in record.fields)
+    assert keys["xmp:dc:title"].editable and not keys["img:width"].editable
+    assert keys["xmp:dc:title"].deletable and not any(f.deletable for k, f in keys.items() if k.startswith("iptc:") and k != "iptc:@block")
+    assert keys["iptc:@block"].deletable
 
 
 def _dir(tmp_path):

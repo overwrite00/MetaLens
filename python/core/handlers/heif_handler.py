@@ -29,6 +29,7 @@ class _Item:
     content_type: str = ""
     extents: list[tuple[int, int]] = field(default_factory=list)   # (offset, length)
     method: int = 0                                                  # 0 = file offset, 1 = idat
+    loc: tuple[int, int, int, int, int] | None = None                # single extent: where its fields are
 
 
 def _cstring(buf: bytes, pos: int) -> tuple[str, int]:
@@ -96,14 +97,22 @@ def _locations(rd: Reader, iloc: Box, items: dict[int, _Item]) -> None:
         take(2)                                             # data_reference_index
         base = take(base_size)
         extents = []
-        for _ in range(take(2)):
+        loc = None
+        count_of_extents = take(2)
+        for _ in range(count_of_extents):
             if index_size:
                 take(index_size)
-            extents.append((base + take(offset_size), take(length_size)))
+            offset_at = pos
+            offset = take(offset_size)
+            length_at = pos
+            extents.append((base + offset, take(length_size)))
+            if count_of_extents == 1:
+                # absolute positions in the file of the offset and length fields, their widths, the base offset
+                loc = (iloc.data_start + offset_at, offset_size, iloc.data_start + length_at, length_size, base)
         if pos > len(data):
             return
         item = items.setdefault(item_id, _Item(item_id))
-        item.extents, item.method = extents, method
+        item.extents, item.method, item.loc = extents, method, loc
 
 
 def _payload(rd: Reader, item: _Item, idat: Box | None) -> bytes | None:
@@ -166,6 +175,45 @@ def _primary_properties(rd: Reader, children: list[Box]) -> dict[str, object]:
     return out
 
 
+MAX_EDIT_BYTES = 256 * 1024 * 1024
+_HEIF_BRANDS = frozenset({b"heic", b"heix", b"hevc", b"hevx", b"heim", b"heis", b"mif1", b"msf1", b"avif", b"avis"})
+
+
+def is_heif_brand(data: bytes) -> bool:
+    return data[4:8] == b"ftyp" and bytes(data[8:12]) in _HEIF_BRANDS
+
+
+def metadata_layout(data) -> dict[str, dict]:
+    """Where the Exif item and the XMP item are, when each is stored in one extent of the file (the only
+    layout that can be changed): ``{"exif": {"item": (start, end), "range": (tiff start, end), "loc": ...},
+    "xmp": {"item": (start, end), "range": (start, end), "loc": ...}}``."""
+    from core.isobmff import Reader
+    rd = Reader(data)
+    meta, children = _meta_children(rd)
+    out: dict[str, dict] = {}
+    if meta is None:
+        return out
+    for item in _items(rd, children).values():
+        if len(item.extents) != 1 or item.method != 0 or item.extents[0][1] <= 0 or item.loc is None:
+            continue
+        start, length = item.extents[0]
+        if start + length > len(data):
+            continue
+        if item.kind == "Exif" and length > 4:
+            skip = struct.unpack_from(">I", data, start)[0]
+            if 4 + skip < length:
+                out.setdefault("exif", {"item": (start, start + length), "range": (start + 4 + skip, start + length),
+                                        "loc": item.loc})
+        elif item.kind == "mime" and item.content_type == _XMP_MIME:
+            out.setdefault("xmp", {"item": (start, start + length), "range": (start, start + length), "loc": item.loc})
+    return out
+
+
+def metadata_ranges(data) -> dict[str, tuple[int, int]]:
+    """Absolute ``(start, end)`` of the TIFF part of the Exif item and of the XMP item."""
+    return {name: entry["range"] for name, entry in metadata_layout(data).items()}
+
+
 class HeifHandler(BaseMetadataHandler):
     NAME = "heif"
     EXTENSIONS = frozenset({".heic", ".heif", ".hif", ".avif"})
@@ -179,12 +227,87 @@ class HeifHandler(BaseMetadataHandler):
             fields = self._fields(path, warnings)
         except Exception as exc:       # reading never raises: damaged data is a read error
             errors.append(f"HEIF read error: {type(exc).__name__}: {exc}")
+        removable = self._editable(path) and not errors
         record = self._make_record(path, read_errors=errors, warnings=warnings,
-                                   supports_write=False, supports_delete=False)
+                                   supports_write=removable, supports_delete=removable)
         record.fields = fields
-        record.read_only_reason = "Metadata of HEIF/AVIF images is read-only for now"
+        if not removable:
+            record.read_only_reason = "The metadata of this HEIF/AVIF file is not stored in a way that can be changed"
+            for f in fields:
+                f.editable = f.deletable = False
+        else:
+            try:
+                record.addable_fields = self.writable_fields(path, record)
+            except Exception:           # the schema is optional: never fail the read for it
+                record.addable_fields = []
         record.dedupe_keys()
         return record
+
+    @staticmethod
+    def _editable(path: Path) -> bool:
+        """The Exif or XMP item is stored in one piece, so it can be changed."""
+        if path.stat().st_size > MAX_EDIT_BYTES:
+            return False
+        return bool(metadata_ranges(path.read_bytes()))
+
+    # ── mutation hooks: EXIF entries and XMP are changed in place (the image items never move) ──
+    def apply_delete(self, tmp: Path, keys: list[str]) -> None:
+        from core.handlers.image_handler import ImageHandler
+        ImageHandler().apply_delete(tmp, keys)
+
+    def snapshot(self, tmp: Path, keys: list[str]):
+        from core.handlers.image_handler import ImageHandler
+        return ImageHandler().snapshot(tmp, keys)
+
+    def restore(self, tmp: Path, snap) -> None:
+        from core.handlers.image_handler import ImageHandler
+        ImageHandler().restore(tmp, snap)
+
+    def canonical(self, field: MetadataField, value):
+        from core.handlers.image_handler import ImageHandler
+        return ImageHandler().canonical(field, value)
+
+    def apply_write(self, tmp: Path, fields: list[MetadataField]) -> None:
+        from core.handlers.image_handler import ImageHandler
+        ImageHandler().apply_write(tmp, fields)
+
+    def writable_fields(self, path: Path, record) -> list[MetadataField]:
+        """EXIF entries (and XMP properties, when the file has an XMP item) that can be added."""
+        from core import jpeg_segments
+        from core.handlers.image_handler import ImageHandler, _HeifState
+        if record.read_errors or path.stat().st_size > MAX_EDIT_BYTES:
+            return []
+        try:
+            state = _HeifState.load(path.read_bytes())
+        except jpeg_segments.JpegFormatError:
+            return []
+        present = {f.key for f in record.fields}
+        return ImageHandler._tiff_addable(ImageHandler()._addable(state, present))
+
+    def writable_field(self, path: Path, key: str) -> MetadataField | None:
+        record = self.read(path)
+        return next((f for f in record.addable_fields if f.key == key), None)
+
+    def content_digest(self, path: Path) -> str | None:
+        """SHA-256 of the data of the image items (everything except the Exif and XMP items), wherever
+        the metadata items are stored."""
+        import hashlib
+        data = Path(path).read_bytes()
+        rd = Reader(data)
+        meta, children = _meta_children(rd)
+        if meta is None:
+            return None
+        idat = next((b for b in children if b.type == b"idat"), None)
+        digest = hashlib.sha256()
+        for item in sorted(_items(rd, children).values(), key=lambda i: i.item_id):
+            if item.kind == "Exif" or (item.kind == "mime" and item.content_type == _XMP_MIME):
+                continue
+            payload = _payload(rd, item, idat)
+            if payload is None and item.extents:
+                return None
+            digest.update(struct.pack(">II", item.item_id, len(payload or b"")))
+            digest.update(payload or b"")
+        return digest.hexdigest()
 
     def _fields(self, path: Path, warnings: list[str]) -> list[MetadataField]:
         fields: list[MetadataField] = []
@@ -223,7 +346,8 @@ class HeifHandler(BaseMetadataHandler):
                 add("heif:Rotation", "Rotation (°)", props["rotation"], "int")
             idat = next((b for b in children if b.type == b"idat"), None)
             items = _items(rd, children)
-            for item in items.values():
+            edited = self._state_fields(path, warnings)
+            for item in ([] if edited is not None else items.values()):
                 data = None
                 if item.kind == "Exif":
                     data = _payload(rd, item, idat)
@@ -240,14 +364,34 @@ class HeifHandler(BaseMetadataHandler):
                             fields += _xmp_fields(xmp.XmpPacket(data), False)
                         except xmp.XmpFormatError as exc:
                             warnings.append(f"XMP not readable: {exc}")
+            if edited is not None:
+                fields += edited
             for prop in (props.get("properties") or []):
                 if prop.type == b"colr" and prop.end - prop.data_start > 4:
                     if bytes(rd.buf[prop.data_start:prop.data_start + 4]) in (b"prof", b"rICC"):
                         fields += icc.fields(bytes(rd.buf[prop.data_start + 4:prop.end]))
         return fields
 
+    @staticmethod
+    def _state_fields(path: Path, warnings: list[str]) -> list[MetadataField] | None:
+        """EXIF / GPS / XMP fields with their removable flags, or ``None`` when the layout cannot be
+        changed in place (the fields are then read straight from the items, read-only)."""
+        from core.handlers.image_handler import ImageHandler, _HeifState
+        from core import jpeg_segments
+        if path.stat().st_size > MAX_EDIT_BYTES:
+            return None
+        data = path.read_bytes()
+        if not metadata_ranges(data):
+            return None
+        try:
+            state = _HeifState.load(data)
+        except jpeg_segments.JpegFormatError:
+            return None
+        warnings += state.warnings
+        return ImageHandler._state_fields(state, True)
+
     def write(self, path: Path, fields: list[MetadataField]) -> None:
-        raise NotImplementedError("HEIF/AVIF metadata is read-only for now")
+        self._atomic_write(path, lambda tmp: self.apply_write(tmp, fields))
 
     def delete(self, path: Path, keys: list[str]) -> None:
-        raise NotImplementedError("HEIF/AVIF metadata is read-only for now")
+        self._atomic_write(path, lambda tmp: self.apply_delete(tmp, keys))

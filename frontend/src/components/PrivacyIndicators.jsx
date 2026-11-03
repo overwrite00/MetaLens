@@ -7,12 +7,13 @@ export const SENSITIVITY = {
   identity: { label: 'Identity', variant: 'danger', hint: 'Reveals who made or owns the file' },
   device: { label: 'Device', variant: 'warning', hint: 'Reveals the device or unique identifiers' },
   thumbnail: { label: 'Thumbnail', variant: 'warning', hint: 'Contains an embedded copy of the content' },
+  history: { label: 'History', variant: 'warning', hint: 'Edit history and other data stored but not shown' },
   datetime: { label: 'Date', variant: 'default', hint: 'Reveals when the file was made or changed' },
   software: { label: 'Software', variant: 'default', hint: 'Reveals the program used' },
   text: { label: 'Text', variant: 'default', hint: 'Free text written by a person' },
 }
 
-const ORDER = ['location', 'identity', 'device', 'thumbnail', 'text', 'datetime', 'software']
+const ORDER = ['location', 'identity', 'device', 'thumbnail', 'history', 'text', 'datetime', 'software']
 
 export function SensitivityBadge({ field }) {
   const info = SENSITIVITY[field?.sensitivity]

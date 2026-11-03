@@ -407,7 +407,7 @@ def photo_no_extension(tmp_path: Path) -> Path:
     return path
 
 
-@sample("tiff_dpi", tags={"read_only"})
+@sample("tiff_dpi")
 def tiff_dpi(tmp_path: Path) -> Path:
     from PIL import Image
     from PIL.TiffImagePlugin import ImageFileDirectory_v2
@@ -419,7 +419,7 @@ def tiff_dpi(tmp_path: Path) -> Path:
     return path
 
 
-@sample("tiff_xmp_iptc", tags={"read_only"})
+@sample("tiff_xmp_iptc", volatile=("exif:XMLPacket", "exif:tag_33723", "iptc:*"))
 def tiff_xmp_iptc(tmp_path: Path) -> Path:
     """TIFF as saved by an editor: XMP packet (tag 700) and IPTC-NAA record (tag 33723)."""
     from PIL import Image
@@ -435,7 +435,7 @@ def tiff_xmp_iptc(tmp_path: Path) -> Path:
     return path
 
 
-@sample("dng_like", tags={"read_only"})
+@sample("dng_like")
 def dng_like(tmp_path: Path) -> Path:
     from PIL import Image
     path = tmp_path / "raw.dng"
@@ -457,7 +457,7 @@ def le_raw_tiff(magic: bytes, make: bytes, model: bytes) -> bytes:
     return magic + struct.pack("<I", ifd_at) + struct.pack("<H", count) + b"".join(entries)         + struct.pack("<I", 0) + bytes(body)
 
 
-@sample("orf_like", tags={"read_only"})
+@sample("orf_like")
 def orf_like(tmp_path: Path) -> Path:
     """Olympus-style raw: big-endian EXIF structure under the ``MMOR`` header."""
     path = tmp_path / "photo.orf"
@@ -466,7 +466,7 @@ def orf_like(tmp_path: Path) -> Path:
     return path
 
 
-@sample("rw2_like", tags={"read_only"})
+@sample("rw2_like")
 def rw2_like(tmp_path: Path) -> Path:
     """Panasonic-style raw: little-endian IFD0 under the ``IIU\0`` header."""
     path = tmp_path / "photo.rw2"
@@ -474,7 +474,7 @@ def rw2_like(tmp_path: Path) -> Path:
     return path
 
 
-@sample("png_text_exif", tags={"read_only"})
+@sample("png_text_exif", mutations=_DATE_MUTATIONS)
 def png_text_exif(tmp_path: Path) -> Path:
     from PIL import Image
     from PIL.PngImagePlugin import PngInfo
@@ -490,7 +490,7 @@ def png_text_exif(tmp_path: Path) -> Path:
     return path
 
 
-@sample("webp_exif", tags={"read_only"})
+@sample("webp_exif", mutations=_DATE_MUTATIONS)
 def webp_exif(tmp_path: Path) -> Path:
     from PIL import Image
     path = tmp_path / "photo.webp"
@@ -512,4 +512,58 @@ def bmp(tmp_path: Path) -> Path:
     from PIL import Image
     path = tmp_path / "image.bmp"
     Image.new("RGB", (8, 8), (1, 1, 1)).save(path, "BMP")
+    return path
+
+
+# ── Canon CR3 and Fujifilm RAF (read-only samples) ──
+
+def simple_tiff(entries: list[tuple[int, int, bytes]]) -> bytes:
+    """Little-endian TIFF with one IFD: (tag, type, value bytes) entries, values stored after the table."""
+    count = len(entries)
+    data_at = 8 + 2 + 12 * count + 4
+    table, body = b"", b""
+    for tag, typ, value in sorted(entries):
+        width = {1: 1, 2: 1, 3: 2, 4: 4, 5: 8}[typ]
+        n = len(value) // width
+        if len(value) <= 4:
+            table += struct.pack("<HHI", tag, typ, n) + value.ljust(4, bytes(1))
+        else:
+            table += struct.pack("<HHII", tag, typ, n, data_at + len(body))
+            body += value
+    return b"II*" + bytes(1) + struct.pack("<I", 8) + struct.pack("<H", count) + table + struct.pack("<I", 0) + body
+
+
+def cr3_bytes() -> bytes:
+    from .mp4 import atom
+    cmt1 = simple_tiff([(0x010F, 2, b"Canon" + bytes(1)), (0x0110, 2, b"Canon EOS R5" + bytes(1)),
+                        (0x013B, 2, b"Jane Doe" + bytes(1))])
+    cmt2 = simple_tiff([(0x829A, 5, struct.pack("<II", 1, 250)), (0x8827, 3, struct.pack("<H", 400)),
+                        (0xA431, 2, b"012345678" + bytes(1))])                        # body serial number
+    cmt4 = simple_tiff([(0x0001, 2, b"N" + bytes(1)), (0x0002, 5, struct.pack("<IIIIII", 45, 1, 27, 1, 3000, 100)),
+                        (0x0003, 2, b"E" + bytes(1)), (0x0004, 5, struct.pack("<IIIIII", 9, 1, 11, 1, 0, 1))])
+    canon = atom(b"uuid", bytes.fromhex("85c0b687820f11e08111f4ce462b6a48") + atom(b"CNCV", b"CanonCR3_001/00.09.00/00.00.00")
+                 + atom(b"CMT1", cmt1) + atom(b"CMT2", cmt2) + atom(b"CMT4", cmt4))
+    return atom(b"ftyp", b"crx " + struct.pack(">I", 1) + b"crx isom") + atom(b"moov", canon) + atom(b"mdat", bytes(64))
+
+
+def raf_bytes() -> bytes:
+    preview = jpeg_with([segment(0xE1, camera_exif(thumbnail=False))])
+    header = bytearray(0x100)
+    header[:16] = b"FUJIFILMCCD-RAW "
+    header[16:20] = b"0201"
+    struct.pack_into(">II", header, 0x54, 0x100, len(preview))
+    return bytes(header) + preview + bytes(64)
+
+
+@sample("cr3_like", tags={"read_only"})
+def cr3_like(tmp_path: Path) -> Path:
+    path = tmp_path / "IMG_0001.cr3"
+    path.write_bytes(cr3_bytes())
+    return path
+
+
+@sample("raf_like", tags={"read_only"})
+def raf_like(tmp_path: Path) -> Path:
+    path = tmp_path / "DSCF0001.raf"
+    path.write_bytes(raf_bytes())
     return path

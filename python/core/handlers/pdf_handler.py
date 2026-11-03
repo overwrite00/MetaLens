@@ -214,6 +214,20 @@ def _key(name: str) -> str:
     return f"pdf:{local}#info" if local in _COMPUTED else f"pdf:{local}"
 
 
+XMP_STREAM_KEY = "pdf:@xmp"
+
+
+def _xmp_bytes(root) -> bytes | None:
+    """Decoded bytes of the document /Metadata stream (any filter pypdf understands), None when absent."""
+    meta = root.get("/Metadata")
+    if meta is None:
+        return None
+    try:
+        return bytes(meta.get_object().get_data())
+    except Exception:    # noqa: BLE001 - not a stream / undecodable: left alone
+        return None
+
+
 def _name(key: str) -> str:
     if not key.startswith("pdf:") or len(key) <= 4 or key[4:] in _COMPUTED or key.endswith("#info"):
         raise MetadataValueError(key, ErrorCode.UNKNOWN_FIELD, f"{key}: not a PDF information entry")
@@ -387,6 +401,26 @@ def _attributed(exc: MetadataValueError, key: str) -> MetadataValueError:
 
 # ──────────────────────── handler ────────────────────────────────────────────
 
+def _xmp_stream_fields(root, removable: bool) -> list[MetadataField]:
+    """The XMP properties of the document (read-only) and the whole stream (removable, computed)."""
+    data = _xmp_bytes(root)
+    if not data:
+        return []
+    from core import xmp as core_xmp
+    from core.handlers.image_handler import _xmp_fields
+    out: list[MetadataField] = []
+    try:
+        out += [f for f in _xmp_fields(core_xmp.XmpPacket(data), False) if f.key != "xmp:@hidden"]
+        for f in out:
+            f.computed = True          # they disappear with the stream
+    except core_xmp.XmpFormatError:
+        pass
+    stream = MetadataField.binary_field(XMP_STREAM_KEY, "XMP metadata stream", data, mime="application/rdf+xml",
+                                        deletable=removable, source="pdf")
+    stream.computed = True          # the entries of the information dictionary are mirrored into it
+    return out + [stream]
+
+
 def _file_structure_fields(path: Path) -> list[MetadataField]:
     """Version of the file header and whether it is linearized (computed: a rewrite changes them)."""
     try:
@@ -453,6 +487,8 @@ class PdfHandler(BaseMetadataHandler):
                 warning = _xmp_of(reader.trailer["/Root"].get_object())[2]
                 if warning:
                     warnings.append(warning)
+            if not encrypted:
+                fields += _xmp_stream_fields(reader.trailer["/Root"].get_object(), signed is None)
             fields += _file_structure_fields(path)
             fields.append(MetadataField("pdf:page_count", "Page Count", len(reader.pages),
                                         editable=False, deletable=False, field_type="int", source="pdf"))
@@ -548,6 +584,17 @@ class PdfHandler(BaseMetadataHandler):
         doc = _Mutation(tmp)
         errors: list[MetadataValueError] = []
         names = []
+        if XMP_STREAM_KEY in keys:
+            keys = [k for k in keys if k != XMP_STREAM_KEY]
+            if "/Metadata" not in doc.writer._root_object:
+                raise MetadataValueError(XMP_STREAM_KEY, ErrorCode.UNKNOWN_FIELD)
+            try:
+                doc.writer._root_object["/Metadata"].get_object().set_data(b"")     # an orphaned object is still written
+            except Exception:      # noqa: BLE001 - not a stream: only the entry goes
+                pass
+            del doc.writer._root_object["/Metadata"]
+            doc.xmp = doc.xmp_stream = None
+            doc.changed = True
         for key in keys:
             try:
                 name = _name(key)
@@ -572,6 +619,10 @@ class PdfHandler(BaseMetadataHandler):
         xmp = None if reader.is_encrypted else _xmp_of(reader.trailer["/Root"].get_object())[0]
         snap: Snapshot = {}
         for key in keys:
+            if key == XMP_STREAM_KEY:
+                data = None if reader.is_encrypted else _xmp_bytes(reader.trailer["/Root"].get_object())
+                snap[key] = ABSENT if data is None else ("xmp-stream", data)
+                continue
             name = _name(key)
             info_raw = _raw(info[name]) if name in info else None
             occurrences = xmp.snapshot(name) if xmp is not None and name in XMP_PROPERTIES else ()
@@ -582,6 +633,21 @@ class PdfHandler(BaseMetadataHandler):
     def restore(self, tmp: Path, snap: Snapshot) -> None:
         doc = _Mutation(tmp)
         for key, raw in snap.items():
+            if key == XMP_STREAM_KEY:
+                from pypdf.generic import DecodedStreamObject, NameObject
+                root = doc.writer._root_object
+                if raw is ABSENT:
+                    if "/Metadata" in root:
+                        del root["/Metadata"]
+                else:
+                    stream = DecodedStreamObject()
+                    stream.set_data(raw[1])
+                    stream[NameObject("/Type")] = NameObject("/Metadata")
+                    stream[NameObject("/Subtype")] = NameObject("/XML")
+                    root[NameObject("/Metadata")] = doc.writer._add_object(stream)
+                doc.xmp = doc.xmp_stream = None
+                doc.changed = True
+                continue
             name = _name(key)
             info_raw, occurrences = (None, ()) if raw is ABSENT else raw
             if info_raw is None:

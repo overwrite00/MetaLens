@@ -22,7 +22,8 @@ def test_rw2_is_read_without_errors(tmp_path):
     assert record.read_errors == []
     assert keys["exif:Make"].value == "Panasonic" and keys["exif:Model"].value == "DC-Test"
     assert any("not supported by the image library" in w for w in record.warnings)
-    assert not record.format_supports_write and not any(f.editable for f in record.fields)
+    assert record.format_supports_write and record.format_supports_delete      # metadata changes are experimental
+    assert keys["exif:Make"].editable
 
 
 @pytest.mark.parametrize("magic", [b"IIRO", b"IIRS"])

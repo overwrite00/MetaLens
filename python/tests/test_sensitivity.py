@@ -15,7 +15,7 @@ from tests.factories import ALL
     ("exif:DateTimeOriginal", "datetime"), ("pdf:CreationDate", "datetime"), ("qt:CreateDate", "datetime"),
     ("qt:track1:CreateDate", "datetime"), ("fs:mtime", "datetime"),
     ("exif:Software", "software"), ("pdf:Producer", "software"), ("xmp:xmpMM:History", "software"),
-    ("exif:Thumbnail", "thumbnail"), ("exif:UserComment", "text"), ("jpeg:Comment", "text"),
+    ("exif:Thumbnail", "thumbnail"), ("xmp:@hidden", "history"), ("exif:UserComment", "text"), ("jpeg:Comment", "text"),
     ("img:width", None), ("exif:Orientation", None), ("audio:bitrate", None), ("icc:Version", None),
 ])
 def test_classification(key, expected):

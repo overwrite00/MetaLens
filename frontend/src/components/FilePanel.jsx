@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { BatchDialog } from './BatchDialog'
 import { File, Image, Music, Film, FileText, FileCode, Archive, Aperture, Sheet, Presentation, AlertCircle } from 'lucide-react'
 import { Spinner } from './ui/Spinner'
 import { metalens } from '../api/client'
@@ -40,11 +41,12 @@ function formatDate(ts) {
   return new Date(ts * 1000).toLocaleString()
 }
 
-export function FilePanel({ currentPath, reloadKey = 0, onSelectFile, onSelectTwo }) {
+export function FilePanel({ currentPath, reloadKey = 0, onSelectFile, onSelectTwo, onUndoPush, runExclusive, onChanged }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [selected, setSelected] = useState(new Set())
+  const [batchOpen, setBatchOpen] = useState(false)
   const [sortKey, setSortKey] = useState('name')
   const [sortAsc, setSortAsc] = useState(true)
 
@@ -177,7 +179,17 @@ export function FilePanel({ currentPath, reloadKey = 0, onSelectFile, onSelectTw
         {sorted.length} file{sorted.length !== 1 ? 's' : ''}
         {selected.size > 0 && ` · ${selected.size} selected`}
         {selected.size === 2 && <span className="text-cyber-cyan ml-1">— ready to compare</span>}
+        {currentPath && (
+          <button className="ml-3 px-1.5 rounded border border-cyber-border text-cyber-muted hover:text-cyber-cyan"
+            onClick={() => setBatchOpen(true)}>
+            {selected.size > 0 ? `Batch (${selected.size})…` : 'Export…'}
+          </button>
+        )}
       </div>
+      {batchOpen && (
+        <BatchDialog paths={Array.from(selected)} folder={currentPath} onClose={() => setBatchOpen(false)}
+          onUndoPush={onUndoPush} runExclusive={runExclusive} onChanged={onChanged} />
+      )}
     </div>
   )
 }

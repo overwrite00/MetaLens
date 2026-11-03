@@ -293,6 +293,9 @@ class OfficeHandler(BaseMetadataHandler):
             errors.append(f"Office read error: {exc}")
             fields = []
         writable = not errors and not signed
+        for field in fields:
+            if field.key.startswith(("office:app.", "office:custom.")):
+                field.deletable = writable
         record = self._make_record(path, read_errors=errors,
                                    supports_write=writable, supports_delete=writable)
         if not writable:
@@ -355,6 +358,12 @@ class OfficeHandler(BaseMetadataHandler):
                 raise MetadataValueError(f"office:{name}", ErrorCode.LOSSY_WRITE)
 
     def apply_delete(self, tmp: Path, keys: list[str]) -> None:
+        extra = [k for k in keys if _extra_part(k)]
+        keys = [k for k in keys if not _extra_part(k)]
+        if extra:
+            self._delete_extra(tmp, extra)
+        if not keys:
+            return
         root = _open_core(tmp)
         errors: list[MetadataValueError] = []
         names = []
@@ -375,13 +384,26 @@ class OfficeHandler(BaseMetadataHandler):
     def snapshot(self, tmp: Path, keys: list[str]) -> Snapshot:
         with ZipFile(tmp) as archive:
             root = _load_core(archive)
+            parts = {part: _parse_part(archive, part, required=False) for part in (_APP_PART, _CUSTOM_PART)}
         snap: Snapshot = {}
         for key in keys:
+            located = _extra_part(key)
+            if located:
+                part_root = parts[located[0]]
+                nodes = _extra_nodes(part_root, *located) if part_root is not None else []
+                snap[key] = tuple((list(part_root).index(n), _node_bytes(n)) for n in nodes) if nodes else ABSENT
+                continue
             nodes = _nodes(root, _property_name(key))
             snap[key] = tuple(_node_bytes(n) for n in nodes) if nodes else ABSENT
         return snap
 
     def restore(self, tmp: Path, snap: Snapshot) -> None:
+        extra = {k: v for k, v in snap.items() if _extra_part(k)}
+        snap = {k: v for k, v in snap.items() if not _extra_part(k)}
+        if extra:
+            self._restore_extra(tmp, extra)
+        if not snap:
+            return
         root = _open_core(tmp)
         for key, raw in snap.items():
             name = _property_name(key)
@@ -394,6 +416,43 @@ class OfficeHandler(BaseMetadataHandler):
                         raise MetadataValueError(key, ErrorCode.INVALID_VALUE, f"{key}: snapshot mismatch")
                     root.append(node)
         _rewrite_core(tmp, root)
+
+    @staticmethod
+    def _part_roots(tmp: Path) -> dict:
+        with ZipFile(tmp) as archive:
+            if _is_signed(archive):
+                raise MetadataValueError(None, ErrorCode.READ_ONLY,
+                                         "Editing digitally signed Office packages is not supported")
+            return {part: _parse_part(archive, part, required=False) for part in (_APP_PART, _CUSTOM_PART)}
+
+    def _delete_extra(self, tmp: Path, keys: list[str]) -> None:
+        roots = self._part_roots(tmp)
+        errors = []
+        for key in keys:
+            part, name = _extra_part(key)
+            nodes = _extra_nodes(roots[part], part, name) if roots[part] is not None else []
+            if not nodes:
+                errors.append(MetadataValueError(key, ErrorCode.UNKNOWN_FIELD))
+                continue
+            for node in nodes:
+                roots[part].remove(node)
+        _raise_collected(errors)
+        _rewrite_parts(tmp, {part: ET.tostring(root, encoding="utf-8", xml_declaration=True)
+                             for part, root in roots.items() if root is not None})
+
+    def _restore_extra(self, tmp: Path, snap: Snapshot) -> None:
+        roots = self._part_roots(tmp)
+        for key, raw in snap.items():
+            part, name = _extra_part(key)
+            if roots[part] is None:
+                continue
+            for node in _extra_nodes(roots[part], part, name):
+                roots[part].remove(node)
+            if raw is not ABSENT:
+                for index, data in sorted(raw):
+                    roots[part].insert(min(index, len(roots[part])), ET.fromstring(data))
+        _rewrite_parts(tmp, {part: ET.tostring(root, encoding="utf-8", xml_declaration=True)
+                             for part, root in roots.items() if root is not None})
 
     # ── public wrappers (own transaction) ────────────────────────────────────
 
@@ -411,14 +470,18 @@ def _rewrite_core(path: Path, root) -> None:
     shapes and vendor extensions. The result is written back into the same file
     opened ``r+b`` (never recreated: Windows refuses ``wb`` on hidden files).
     """
-    raw = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    _rewrite_parts(path, {_CORE_PART: ET.tostring(root, encoding="utf-8", xml_declaration=True)})
+
+
+def _rewrite_parts(path: Path, replacements: dict[str, bytes]) -> None:
+    """Replace the named parts of the package, streaming every other member unchanged."""
     with tempfile.TemporaryFile(dir=path.parent) as output:
         with ZipFile(path) as source:
             with ZipFile(output, "w") as destination:
                 destination.comment = source.comment
                 for info in source.infolist():
-                    if info.filename == _CORE_PART:
-                        destination.writestr(copy(info), raw)
+                    if info.filename in replacements:
+                        destination.writestr(copy(info), replacements[info.filename])
                     else:
                         with source.open(info) as reader, destination.open(copy(info), "w") as writer:
                             shutil.copyfileobj(reader, writer)
@@ -426,3 +489,20 @@ def _rewrite_core(path: Path, root) -> None:
         with path.open("r+b") as target:
             shutil.copyfileobj(output, target)
             target.truncate()
+
+
+# -- application / custom properties: removable one by one --
+
+def _extra_part(key: str) -> tuple[str, str] | None:
+    """(part, property name) of an ``office:app.<Name>`` / ``office:custom.<name>`` key."""
+    if key.startswith("office:app."):
+        return _APP_PART, key[len("office:app."):]
+    if key.startswith("office:custom."):
+        return _CUSTOM_PART, key[len("office:custom."):]
+    return None
+
+
+def _extra_nodes(root, part: str, name: str) -> list:
+    if part == _APP_PART:
+        return [c for c in root if _local(c.tag) == (_APP_NS, name)]
+    return [c for c in root if c.tag == "{" + _CUSTOM_NS + "}property" and c.get("name") == name]

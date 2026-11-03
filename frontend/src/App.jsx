@@ -215,6 +215,9 @@ export default function App() {
             reloadKey={filesReloadKey}
             onSelectFile={handleSelectFile}
             onSelectTwo={handleSelectTwo}
+            onUndoPush={undoPush}
+            runExclusive={runExclusive}
+            onChanged={() => setFilesReloadKey(value => value + 1)}
           />
         </div>
 

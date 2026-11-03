@@ -39,13 +39,14 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from core import exif_codec, icc, iptc, jpeg_segments, sniff, values, xmp
+from core import exif_codec, icc, image_containers, iptc, jpeg_segments, sniff, tiff_inplace, values, xmp
 from core.base_handler import ABSENT, BaseMetadataHandler, Snapshot
 from core.errors import ErrorCode, MetadataValueError, MetadataValueErrors
 from core.models import MetadataField, MetadataRecord
 
 _READ_ONLY_EXTS = frozenset({".cr2", ".nef", ".arw", ".dng", ".orf", ".rw2", ".pef", ".srw",
-                             ".rwl", ".nrw", ".srf", ".sr2", ".3fr", ".erf", ".mos", ".kdc", ".dcr", ".mef", ".iiq"})
+                             ".rwl", ".nrw", ".srf", ".sr2", ".3fr", ".erf", ".mos", ".kdc", ".dcr", ".mef", ".iiq",
+                             ".cr3", ".raf"})
 JPEG_EXTS = frozenset({".jpg", ".jpeg"})
 
 
@@ -218,6 +219,8 @@ def _namespace(key: str) -> str:
         return "xmp"
     if key.startswith("iptc:"):
         return "iptc"
+    if key.startswith("png:"):
+        return "png"
     raise MetadataValueError(key, ErrorCode.UNKNOWN_FIELD)
 
 
@@ -428,6 +431,574 @@ class _JpegState:
         return self.jpeg.to_bytes()
 
 
+class _PngState(_JpegState):
+    """Metadata blocks of a PNG: EXIF in ``eXIf``, XMP in an ``iTXt`` chunk; no IPTC.
+
+    Reuses the editing model of ``_JpegState`` (``exif`` / ``xmp`` blocks, ``touched``, ``exact``): only the
+    container I/O differs. Text chunks are removed through ``png`` (never edited)."""
+    png: image_containers.PngFile
+
+    @classmethod
+    def load(cls, data: bytes, *, tolerant: bool = False) -> "_PngState":
+        try:
+            png = image_containers.PngFile.parse(data)
+        except image_containers.ContainerError as exc:
+            raise jpeg_segments.JpegFormatError(f"PNG structure error: {exc}") from exc
+        state = cls(jpeg_segments.JpegFile(b""))
+        state.png = png
+        state.iptc_writable = False
+        state._load_exif()
+        state._load_xmp()
+        return state
+
+    def read_only_reason(self) -> str | None:
+        return None
+
+    def segment(self, ns: str) -> tuple[bytes | None, int | None]:
+        if ns == "exif":
+            found = self.png.index_of(b"eXIf")
+            return (self.png.chunks[found[0]][1], found[0]) if found else (None, None)
+        if ns == "xmp":
+            found = self.png.xmp_indexes()
+            return (self.png.xmp_packet(found[0]), found[0]) if found else (None, None)
+        return None, None
+
+    def _load_exif(self) -> None:
+        found = self.png.index_of(b"eXIf")
+        if not found:
+            return
+        if len(found) > 1:
+            self.warnings.append(f"{len(found)} EXIF chunks: only the first is used; the duplicates are "
+                                 "removed on the next EXIF save")
+        try:
+            self.exif = exif_codec.parse(_strip_exif_header(self.png.chunks[found[0]][1]))
+        except exif_codec.ExifFormatError as exc:
+            self.errors.append(f"EXIF read error: {exc}")
+            self.exif_writable = False
+            return
+        if self.exif.rewrite_problems:
+            self.exif_writable = False
+            self.warnings.append("EXIF is read-only: " + "; ".join(self.exif.rewrite_problems))
+
+    def _load_xmp(self) -> None:
+        found = self.png.xmp_indexes()
+        if not found:
+            return
+        if len(found) > 1:
+            self.xmp_writable = False
+            self.warnings.append(f"{len(found)} XMP chunks: XMP is read-only")
+        packet = self.png.xmp_packet(found[0])
+        try:
+            if packet is None:
+                raise xmp.XmpFormatError("the chunk cannot be decoded")
+            self.xmp = xmp.XmpPacket(packet)
+        except xmp.XmpFormatError as exc:
+            self.xmp_writable = False
+            self.warnings.append(f"XMP not readable, left untouched: {exc}")
+
+    def _load_iptc(self) -> None:
+        return
+
+    def to_bytes(self, size_keys: dict[str, str | None]) -> bytes:
+        if "exif" in self.touched:
+            tiff = self.exact.get("exif")
+            if tiff is None and self.exif is not None and (any(self.exif.ifds.values()) or self.exif.thumbnail):
+                tiff = exif_codec.serialize(self.exif)
+            self.png.set_exif(tiff, self.hints.get("exif"))
+        if "xmp" in self.touched and self.xmp is not None:
+            packet = self.exact.get("xmp")
+            if packet is None and not self.xmp.is_blank():
+                packet = self.xmp.to_bytes()
+            self.png.set_xmp(packet, self.hints.get("xmp"))
+        return self.png.to_bytes()
+
+
+class _WebpState(_JpegState):
+    """Metadata blocks of a WebP: ``EXIF`` and ``XMP `` chunks; no IPTC."""
+    webp: image_containers.WebpFile
+
+    @classmethod
+    def load(cls, data: bytes, *, tolerant: bool = False) -> "_WebpState":
+        try:
+            webp = image_containers.WebpFile.parse(data)
+        except image_containers.ContainerError as exc:
+            raise jpeg_segments.JpegFormatError(f"WebP structure error: {exc}") from exc
+        state = cls(jpeg_segments.JpegFile(b""))
+        state.webp = webp
+        state.iptc_writable = False
+        state._load_exif()
+        state._load_xmp()
+        return state
+
+    def read_only_reason(self) -> str | None:
+        if self.webp.find(b"ANIM") or self.webp.find(b"ANMF"):
+            return "Animated WebP files are read-only"
+        return None
+
+    def segment(self, ns: str) -> tuple[bytes | None, int | None]:
+        found = self.webp.find({"exif": b"EXIF", "xmp": b"XMP "}.get(ns, b""))
+        return (self.webp.chunks[found[0]][1], found[0]) if found else (None, None)
+
+    def _load_exif(self) -> None:
+        found = self.webp.find(b"EXIF")
+        if not found:
+            return
+        if len(found) > 1:
+            self.warnings.append(f"{len(found)} EXIF chunks: only the first is used")
+        try:
+            self.exif = exif_codec.parse(_strip_exif_header(self.webp.chunks[found[0]][1]))
+        except exif_codec.ExifFormatError as exc:
+            self.errors.append(f"EXIF read error: {exc}")
+            self.exif_writable = False
+            return
+        if self.exif.rewrite_problems:
+            self.exif_writable = False
+            self.warnings.append("EXIF is read-only: " + "; ".join(self.exif.rewrite_problems))
+
+    def _load_xmp(self) -> None:
+        found = self.webp.find(b"XMP ")
+        if not found:
+            return
+        if len(found) > 1:
+            self.xmp_writable = False
+            self.warnings.append(f"{len(found)} XMP chunks: XMP is read-only")
+        try:
+            self.xmp = xmp.XmpPacket(self.webp.chunks[found[0]][1])
+        except xmp.XmpFormatError as exc:
+            self.xmp_writable = False
+            self.warnings.append(f"XMP not readable, left untouched: {exc}")
+
+    def _load_iptc(self) -> None:
+        return
+
+    def to_bytes(self, size_keys: dict[str, str | None]) -> bytes:
+        try:
+            if "exif" in self.touched:
+                tiff = self.exact.get("exif")
+                if tiff is None and self.exif is not None and (any(self.exif.ifds.values()) or self.exif.thumbnail):
+                    tiff = exif_codec.serialize(self.exif)
+                self.webp.set_exif(tiff)
+            if "xmp" in self.touched and self.xmp is not None:
+                packet = self.exact.get("xmp")
+                if packet is None and not self.xmp.is_blank():
+                    packet = self.xmp.to_bytes()
+                self.webp.set_xmp(packet)
+        except image_containers.ContainerError as exc:
+            raise MetadataValueError(None, ErrorCode.UNSUPPORTED, f"WebP cannot take this metadata: {exc}") from exc
+        return self.webp.to_bytes()
+
+
+_XMP_UUID = bytes.fromhex("be7acfcb97a942e89c71999491e3afac")
+
+
+def _mp4_xmp_location(data: bytes) -> tuple[int, int] | None:
+    """(start, end) of the XMP packet of an MP4-family file: a ``uuid`` atom at the root or an ``XMP_`` atom in ``udta``."""
+    from core.isobmff import Reader
+    rd = Reader(data)
+    for box in rd.children():
+        if box.type == b"uuid" and box.usertype == _XMP_UUID:
+            return box.data_start, box.end
+    moov = rd.find(None, b"moov")
+    udta = rd.find(moov, b"udta") if moov is not None else None
+    if udta is not None:
+        for box in rd.children(udta.data_start, udta.end):
+            if box.type == b"XMP_":
+                return box.data_start, box.end
+    return None
+
+
+class _Mp4State(_JpegState):
+    """The XMP packet of an MP4-family file. Changed in place: the packet never grows, the atoms around it
+    stay where they are, so no media offset changes."""
+    data: bytes
+    location: tuple[int, int] | None
+
+    @classmethod
+    def load(cls, data: bytes, *, tolerant: bool = False) -> "_Mp4State":
+        state = cls(jpeg_segments.JpegFile(b""))
+        state.data = data
+        state.iptc_writable = False
+        state.exif_writable = False             # EXIF is not stored in these files
+        state.location = _mp4_xmp_location(data)
+        state._load_xmp()
+        if state.location is None:
+            state.xmp_writable = True            # no packet yet: a first property is stored in a new atom
+        return state
+
+    def read_only_reason(self) -> str | None:
+        return None
+
+    def segment(self, ns: str) -> tuple[bytes | None, int | None]:
+        if ns == "xmp" and self.location is not None:
+            return self.data[self.location[0]:self.location[1]], 0
+        return None, None
+
+    def _load_exif(self) -> None:
+        return
+
+    def _load_iptc(self) -> None:
+        return
+
+    def _load_xmp(self) -> None:
+        if self.location is None:
+            self.xmp_writable = False
+            return
+        try:
+            self.xmp = xmp.XmpPacket(self.data[self.location[0]:self.location[1]])
+        except xmp.XmpFormatError as exc:
+            self.xmp_writable = False
+            self.warnings.append(f"XMP not readable, left untouched: {exc}")
+
+    def to_bytes(self, size_keys: dict[str, str | None]) -> bytes:
+        if "xmp" in self.touched and self.xmp is not None and self.location is None and not self.xmp.is_blank():
+            return self._appended(self.xmp.to_bytes(), clear=None)
+        if "xmp" not in self.touched or self.xmp is None or self.location is None:
+            return self.data
+        start, end = self.location
+        packet = self.exact.get("xmp")
+        if packet is None:
+            packet = (xmp.XmpPacket.new() if self.xmp.is_blank() else self.xmp).to_bytes()
+        if len(packet) > end - start:
+            # does not fit: a new atom at the end of the file, the old one is cleared (nothing moves)
+            return self._appended(packet, clear=(start, end))
+        return self.data[:start] + packet + b" " * (end - start - len(packet)) + self.data[end:]
+
+    def _appended(self, packet: bytes, clear: tuple[int, int] | None) -> bytes:
+        out = bytearray(self.data)
+        if clear is not None:
+            start, end = clear
+            # the old atom becomes a ``free`` atom (so that it is not found again) and its content is cleared
+            header = start - 24 if bytes(out[start - 20:start - 16]) == b"uuid" else start - 8
+            out[header + 4:header + 8] = b"free"
+            out[header + 8:end] = bytes(end - header - 8)
+        out += struct.pack(">I", 24 + len(packet)) + b"uuid" + _XMP_UUID + packet
+        return bytes(out)
+
+
+_TIFF_EXTS = frozenset({".tif", ".tiff"}) | _READ_ONLY_EXTS
+
+
+class _TiffState(_JpegState):
+    """A TIFF / DNG / TIFF-based RAW: entries are removed in place and the XMP packet (tag 700) is reduced
+    in place, so nothing in the file moves. Nothing is added or edited."""
+    buf: bytearray
+
+    @classmethod
+    def load(cls, data: bytes, *, tolerant: bool = False) -> "_TiffState":
+        state = cls(jpeg_segments.JpegFile(b""))
+        state.buf = bytearray(data)
+        state.iptc_writable = False
+        try:
+            tiff_inplace.parse(state.buf)
+        except (tiff_inplace.TiffError, struct.error) as exc:
+            raise jpeg_segments.JpegFormatError(f"TIFF structure error: {exc}") from exc
+        state._load_exif()
+        state._load_xmp()
+        state._original = {name: dict(entries) for name, entries in state.exif.ifds.items()} if state.exif else {}
+        return state
+
+    def read_only_reason(self) -> str | None:
+        return None
+
+    def _location(self) -> tuple[int, int] | None:
+        _, ifds = tiff_inplace.parse(self.buf)
+        entry = next((e for e in ifds["0th"].entries if e.tag == 700), None)
+        if entry is None or entry.data_at is None or entry.type not in (1, 7):
+            return None
+        return entry.data_at, entry.data_at + entry.size
+
+    def segment(self, ns: str) -> tuple[bytes | None, int | None]:
+        if ns == "xmp":
+            location = self._location()
+            if location is not None:
+                return bytes(self.buf[location[0]:location[1]]), 0
+        return None, None
+
+    def _load_exif(self) -> None:
+        try:
+            self.exif = exif_codec.parse(bytes(self.buf), with_ifd1=False, raw=True)
+        except exif_codec.ExifFormatError as exc:
+            self.errors.append(f"EXIF read error: {exc}")
+            self.exif_writable = False
+
+    def _load_xmp(self) -> None:
+        location = self._location()
+        if location is None:
+            self.xmp_writable = not any(e.tag == 700 for e in tiff_inplace.parse(self.buf)[1]["0th"].entries)
+            return
+        try:
+            self.xmp = xmp.XmpPacket(bytes(self.buf[location[0]:location[1]]))
+        except xmp.XmpFormatError as exc:
+            self.xmp_writable = False
+            self.warnings.append(f"XMP not readable, left untouched: {exc}")
+
+    def _load_iptc(self) -> None:
+        return
+
+    def _apply_exif_changes(self) -> None:
+        """Write the entries that differ from the file: over the old value when it fits, else appended."""
+        if self.exif is None:
+            return
+        try:
+            for name in ("0th", "Exif", "GPS", "Interop"):
+                for tag, entry in sorted(self.exif.ifds[name].items()):
+                    if self._original.get(name, {}).get(tag) != entry:
+                        if not tiff_inplace.editable(name, tag):
+                            raise MetadataValueError(exif_codec.key_for(name, tag), ErrorCode.READ_ONLY)
+                        tiff_inplace.set_entry(self.buf, name, tag, entry.type, entry.count, entry.data)
+        except tiff_inplace.TiffError as exc:
+            raise MetadataValueError(None, ErrorCode.UNSUPPORTED, f"the EXIF change cannot be stored: {exc}") from exc
+
+    def _apply_xmp(self) -> None:
+        packet = self.exact.get("xmp")
+        if packet is None and self.xmp.is_blank():
+            tiff_inplace.remove(self.buf, "0th", {700}, force=True)          # nothing left: drop the packet
+            return
+        if packet is None:
+            packet = self.xmp.to_bytes()
+        location = self._location()
+        try:
+            if location is not None and len(packet) <= location[1] - location[0]:
+                start, end = location
+                self.buf[start:end] = packet + b" " * (end - start - len(packet))
+            else:
+                tiff_inplace.set_entry(self.buf, "0th", 700, 1, len(packet), packet)
+        except tiff_inplace.TiffError as exc:
+            raise MetadataValueError(None, ErrorCode.UNSUPPORTED, f"the XMP change cannot be stored: {exc}") from exc
+
+    def to_bytes(self, size_keys: dict[str, str | None]) -> bytes:
+        if "exif" in self.touched:
+            self._apply_exif_changes()
+        if "xmp" in self.touched and self.xmp is not None:
+            self._apply_xmp()
+        return bytes(self.buf)
+
+
+class _HeifState(_TiffState):
+    """HEIC / HEIF / AVIF: the TIFF part of the Exif item and the XMP item are changed where they are; an item
+    that outgrows its place is written again at the end of the file as a new ``mdat`` atom and its entry in the
+    item location table is pointed there (the old bytes are zeroed). Image items and every other offset stay."""
+    data: bytearray
+    layout: dict
+
+    @classmethod
+    def load(cls, data: bytes, *, tolerant: bool = False) -> "_HeifState":
+        from core.handlers.heif_handler import metadata_layout
+        layout = metadata_layout(data)
+        if not layout:
+            raise jpeg_segments.JpegFormatError("HEIF structure error: no Exif or XMP item stored in one piece")
+        state = cls(jpeg_segments.JpegFile(b""))
+        state.data = bytearray(data)
+        state.layout = layout
+        exif = layout.get("exif")
+        state.buf = bytearray(data[exif["range"][0]:exif["range"][1]]) if exif else bytearray()
+        state.iptc_writable = False
+        if exif:
+            state._load_exif()
+            state._original = {name: dict(entries) for name, entries in state.exif.ifds.items()} if state.exif else {}
+        else:
+            state._original = {}
+        state._load_xmp()
+        return state
+
+    def _xmp_range(self) -> tuple[int, int] | None:
+        item = self.layout.get("xmp")
+        return item["range"] if item else None
+
+    def _location(self) -> tuple[int, int] | None:
+        return self._xmp_range()
+
+    def segment(self, ns: str) -> tuple[bytes | None, int | None]:
+        if ns == "xmp" and self._xmp_range() is not None:
+            start, end = self._xmp_range()
+            return bytes(self.data[start:end]), 0
+        return None, None
+
+    def _load_xmp(self) -> None:
+        located = self._xmp_range()
+        if located is None:
+            self.xmp_writable = False             # no XMP item: this file has nowhere to put XMP properties
+            return
+        try:
+            self.xmp = xmp.XmpPacket(bytes(self.data[located[0]:located[1]]))
+        except xmp.XmpFormatError as exc:
+            self.xmp_writable = False
+            self.warnings.append(f"XMP not readable, left untouched: {exc}")
+
+    def _move_item(self, name: str, payload: bytes) -> None:
+        """Write ``payload`` as the new content of the item ``name`` at the end of the file."""
+        entry = self.layout[name]
+        offset_at, offset_size, length_at, length_size, base = entry["loc"]
+        start = len(self.data) + 8
+        if start - base >= 1 << (8 * offset_size) or len(payload) >= 1 << (8 * length_size):
+            raise MetadataValueError(None, ErrorCode.TOO_LARGE, "the item location table cannot address the new item")
+        old_start, old_end = entry["item"]
+        self.data.extend(struct.pack(">I", 8 + len(payload)) + b"mdat" + payload)
+        self.data[old_start:old_end] = bytes(old_end - old_start)
+        self.data[offset_at:offset_at + offset_size] = (start - base).to_bytes(offset_size, "big")
+        self.data[length_at:length_at + length_size] = len(payload).to_bytes(length_size, "big")
+        entry["item"] = (start, start + len(payload))
+        entry["range"] = (start + (4 if name == "exif" else 0), start + len(payload))
+
+    def to_bytes(self, size_keys: dict[str, str | None]) -> bytes:
+        if "exif" in self.touched:
+            self._apply_exif_changes()
+        exif = self.layout.get("exif")
+        if exif is not None and (bytes(self.buf) != bytes(self.data[exif["range"][0]:exif["range"][1]])):
+            start, end = exif["range"]
+            if len(self.buf) <= end - start:
+                self.data[start:end] = bytes(self.buf).ljust(end - start, b"\x00")
+            else:
+                self._move_item("exif", struct.pack(">I", 0) + bytes(self.buf))
+        if "xmp" in self.touched and self.xmp is not None:
+            located = self._xmp_range()
+            packet = self.exact.get("xmp")
+            if packet is None:
+                packet = (xmp.XmpPacket.new() if self.xmp.is_blank() else self.xmp).to_bytes()
+            if located is None:
+                raise MetadataValueError(None, ErrorCode.UNSUPPORTED,
+                                         "this file has no XMP item: XMP cannot be added to it")
+            if len(packet) <= located[1] - located[0]:
+                self.data[located[0]:located[1]] = packet + b" " * (located[1] - located[0] - len(packet))
+            else:
+                self._move_item("xmp", packet)
+        return bytes(self.data)
+
+
+IPTC_BLOCK_KEY = "iptc:@block"
+
+
+def _tiff_iptc_block(buf, writable: bool) -> list[MetadataField]:
+    """The IPTC-NAA record of a TIFF as one removable field (its datasets are not edited one by one)."""
+    try:
+        _, ifds = tiff_inplace.parse(buf)
+        entry = next((e for e in ifds["0th"].entries if e.tag == 33723), None)
+    except (tiff_inplace.TiffError, struct.error):
+        return []
+    if entry is None or entry.data_at is None:
+        return []
+    data = bytes(buf[entry.data_at:entry.data_at + entry.size])
+    field = MetadataField.binary_field(IPTC_BLOCK_KEY, "IPTC record (all its fields)", data, mime="application/x-iptc",
+                                       deletable=writable, source="iptc")
+    field.computed = True
+    return [field]
+
+
+def _tiff_deletable(fields: list[MetadataField], writable: bool) -> None:
+    """Mark which EXIF/GPS entries of a TIFF-based file can be removed; nothing can be edited in place."""
+    for f in fields:
+        if f.key.startswith(("exif:", "gps:")):
+            where = exif_codec.parse_key(f.key)
+            f.deletable = bool(writable and where and tiff_inplace.removable(*where))
+            f.editable = bool(writable and where and f.editable and f.field_type != "binary"
+                              and tiff_inplace.editable(*where))
+            if where in (("0th", 700), ("0th", 33723)):
+                f.computed = True        # the raw XMP / IPTC bytes change with their interpreted fields
+            continue
+        elif f.key == IPTC_BLOCK_KEY:
+            f.deletable = bool(writable)
+        elif f.key.startswith(("xmp:", "iptc:")):
+            f.deletable = bool(writable and f.key.startswith("xmp:") and f.deletable)
+            f.editable = bool(writable and f.key.startswith("xmp:") and f.editable)
+        else:
+            f.editable = False
+
+
+def _container_kind(path: Path) -> str | None:
+    """``jpeg`` / ``png`` / ``webp`` when the file may be edited as such: its bytes say so and its
+    extension agrees (or it has none)."""
+    suffix = path.suffix.lower()
+    kind = sniff.detect(path)
+    if kind == "tiff" or (kind is None and suffix in _READ_ONLY_EXTS and _read_head(path)[:4] in exif_codec.RAW_MAGICS):
+        return "tiff" if suffix in _TIFF_EXTS else None
+    if kind not in ("jpeg", "png", "webp"):
+        return None
+    allowed = {"jpeg": JPEG_EXTS, "png": {".png"}, "webp": {".webp"}}[kind]
+    return kind if suffix in allowed or suffix == "" else None
+
+
+def _state_for(data: bytes) -> "_JpegState":
+    """Metadata state of the container the bytes are (JPEG, PNG or WebP)."""
+    if data[:8] == _PNG_SIGNATURE:
+        return _PngState.load(data)
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return _WebpState.load(data)
+    if data[4:8] == b"ftyp":
+        from core.handlers.heif_handler import is_heif_brand
+        return _HeifState.load(data) if is_heif_brand(data) else _Mp4State.load(data)
+    if data[:4] in (b"II*\x00", b"MM\x00*") or data[:4] in exif_codec.RAW_MAGICS:
+        return _TiffState.load(data)
+    return _JpegState.load(data)
+
+
+def _png_text_key(chunk: list) -> str | None:
+    """Field key (``png:<keyword>`` or ``png:<keyword>@<language>``) of a text chunk."""
+    found = image_containers.PngFile.text_keyword(chunk)
+    if found is None:
+        return None
+    keyword, language = found
+    return f"png:{keyword}@{language}" if language else f"png:{keyword}"
+
+
+def _png_text_fields(png: "image_containers.PngFile", writable: bool) -> list[MetadataField]:
+    """PNG text chunks: shown, and removable (never edited in place)."""
+    texts, _ = _png_metadata(png.to_bytes(), [], None)
+    return [MetadataField(f"png:{k}", k, v, editable=False, deletable=writable,
+                          field_type="text" if "\n" in v else "str", source="png")
+            for k, v in texts]
+
+
+_CANON_UUID = bytes.fromhex("85c0b687820f11e08111f4ce462b6a48")
+
+
+def _cr3_fields(path: Path, warnings: list[str]) -> list[MetadataField]:
+    """EXIF / GPS of a Canon CR3: the tables CMT1 (main), CMT2 (Exif) and CMT4 (GPS) of the Canon ``uuid`` atom."""
+    from core.isobmff import open_reader
+    block = exif_codec.ExifBlock.empty()
+    found = False
+    with open_reader(path) as rd:
+        moov = rd.find(None, b"moov")
+        canon = next((b for b in (rd.children(moov.data_start, moov.end) if moov else [])
+                      if b.type == b"uuid" and b.usertype == _CANON_UUID), None)
+        if canon is None:
+            warnings.append("No Canon metadata atom found")
+            return []
+        for atom in rd.children(canon.data_start, canon.end):
+            target = {b"CMT1": "0th", b"CMT2": "Exif", b"CMT4": "GPS"}.get(atom.type)
+            if target is None:
+                continue
+            try:
+                part = exif_codec.parse(rd.payload(atom), with_ifd1=False)
+            except exif_codec.ExifFormatError as exc:
+                warnings.append(f"{atom.type.decode()} not readable: {exc}")
+                continue
+            block.byteorder = part.byteorder if not found else block.byteorder
+            block.ifds[target] = part.ifds["0th"]
+            found = True
+    return _exif_fields(block, False) if found else []
+
+
+def _raf_fields(path: Path, warnings: list[str]) -> list[MetadataField]:
+    """EXIF / XMP / IPTC of the JPEG preview stored in a Fujifilm RAF file."""
+    with open(path, "rb") as stream:
+        head = stream.read(0x5C)
+        if len(head) < 0x5C:
+            return []
+        offset, length = struct.unpack(">II", head[0x54:0x5C])
+        stream.seek(offset)
+        jpeg = stream.read(min(length, 64 * 1024 * 1024))
+    if not jpeg_segments.is_jpeg(jpeg[:4]):
+        warnings.append("The preview picture of this RAF could not be found")
+        return []
+    try:
+        state = _JpegState.load(jpeg, tolerant=True)
+    except jpeg_segments.JpegFormatError as exc:
+        warnings.append(f"RAF preview not readable: {exc}")
+        return []
+    warnings.extend(state.warnings)
+    return ImageHandler._state_fields(state, False)
+
+
 def _linked_fields_agree(state: _JpegState) -> bool:
     """Every IPTC dataset that has an XMP twin in the file holds the same value as the twin."""
     fields = {f.key: f for f in ImageHandler._state_fields(state, False)}
@@ -529,8 +1100,12 @@ def _xmp_key_map(packet: xmp.XmpPacket) -> dict[str, tuple[str, str]]:
     return out
 
 
+XMP_HIDDEN_KEY = "xmp:@hidden"
+
+
 def _xmp_fields(packet: xmp.XmpPacket, writable: bool) -> list[MetadataField]:
     fields: list[MetadataField] = []
+    hidden: list[xmp.Prop] = []
     seen: set[tuple[str, str]] = set()
     for prop in packet.properties():
         name = (prop.uri, prop.local)
@@ -544,7 +1119,22 @@ def _xmp_fields(packet: xmp.XmpPacket, writable: bool) -> list[MetadataField]:
             f = _unmapped_xmp_field(packet, prop, writable)
         if f is not None:
             fields.append(f)
+        else:
+            hidden.append(prop)
+    if hidden:
+        # Structured data (edit history, document ids, derived-from...) that has no field of its own:
+        # listed so that it is not a blind spot, and removable as a whole.
+        names = [f"{xmp.KNOWN_PREFIXES.get(p.uri) or p.prefix or 'ns'}:{p.local}" for p in hidden]
+        fields.append(MetadataField(XMP_HIDDEN_KEY, "XMP data not shown", names, raw_value=names, editable=False,
+                                    deletable=writable, field_type="str", source="xmp", multi=True, computed=True))
     return fields
+
+
+def _xmp_hidden(packet: xmp.XmpPacket) -> list[tuple[str, str]]:
+    """(uri, local) of the properties of the packet that have no field of their own."""
+    return [(p.uri, p.local) for p in packet.properties()
+            if ((_mapped_xmp_field(packet, p, _XMP_BY_NAME[(p.uri, p.local)], True)
+                 if (p.uri, p.local) in _XMP_BY_NAME else _unmapped_xmp_field(packet, p, True)) is None)]
 
 
 def _mapped_xmp_field(packet, prop, key, writable) -> MetadataField | None:
@@ -671,6 +1261,7 @@ def _png_chunks(data: bytes):
         pos += 12 + length
 
 
+_PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 _MAX_TEXT = 1 << 20
 
 
@@ -846,6 +1437,7 @@ class ImageHandler(BaseMetadataHandler):
         ".png", ".bmp", ".gif", ".webp", ".ico",
         ".cr2", ".nef", ".arw", ".dng", ".orf", ".rw2", ".pef", ".srw",
         ".rwl", ".nrw", ".srf", ".sr2", ".3fr", ".erf", ".mos", ".kdc", ".dcr", ".mef", ".iiq",
+        ".cr3", ".raf",
     })
     PRIORITY = 10
 
@@ -876,34 +1468,72 @@ class ImageHandler(BaseMetadataHandler):
                 more, reason = self._jpeg_fields(path, writable, errors, warnings)
                 fields += more
             elif head[:4] in (b"II*\x00", b"MM\x00*") or head[:4] in exif_codec.RAW_MAGICS:
-                fields += self._tiff_fields(path, errors)
+                writable = _container_kind(path) == "tiff"
+                fields += self._tiff_fields(path, errors, writable)
+                if writable and suffix in _READ_ONLY_EXTS:
+                    warnings.append("Raw file: metadata changes are experimental (nothing existing is moved); "
+                                    "check the result with your raw software")
             elif head[:8] == b"\x89PNG\r\n\x1a\n":
+                data = path.read_bytes()
                 extras = _PngExtras()
-                texts, exif = _png_metadata(path.read_bytes(), warnings, extras)
+                texts, exif = _png_metadata(data, warnings, extras)
                 fields += _png_structure_fields(extras)
                 if extras.icc is not None:
                     fields += icc.fields(extras.icc)
-                fields += [MetadataField(f"png:{k}", k, v, editable=False, deletable=False,
-                                         field_type="text" if "\n" in v else "str", source="png")
-                           for k, v in texts]
-                if exif is not None:
-                    fields += self._exif_bytes_fields(_strip_exif_header(exif), errors)
-                if extras.xmp is not None:
+                state = None
+                if _container_kind(path) == "png":
                     try:
-                        fields += _xmp_fields(xmp.XmpPacket(extras.xmp), False)
-                    except xmp.XmpFormatError as exc:
-                        warnings.append(f"XMP not readable: {exc}")
-            elif head[:4] == b"RIFF" and head[8:12] == b"WEBP":
-                for fourcc, body in _riff_chunks(path.read_bytes()):
-                    if fourcc == b"ICCP":
-                        fields += icc.fields(body)
-                    elif fourcc == b"EXIF":
-                        fields += self._exif_bytes_fields(_strip_exif_header(body), errors)
-                    elif fourcc == b"XMP ":
+                        state = _PngState.load(data)
+                    except jpeg_segments.JpegFormatError as exc:
+                        warnings.append(f"{exc}: metadata is shown but read-only")
+                if state is not None:
+                    errors += state.errors
+                    warnings += state.warnings
+                    writable = True
+                    fields += self._state_fields(state, writable)
+                else:
+                    fields += [MetadataField(f"png:{k}", k, v, editable=False, deletable=False,
+                                             field_type="text" if "\n" in v else "str", source="png")
+                               for k, v in texts]
+                    if exif is not None:
+                        fields += self._exif_bytes_fields(_strip_exif_header(exif), errors)
+                    if extras.xmp is not None:
                         try:
-                            fields += _xmp_fields(xmp.XmpPacket(body), False)
+                            fields += _xmp_fields(xmp.XmpPacket(extras.xmp), False)
                         except xmp.XmpFormatError as exc:
                             warnings.append(f"XMP not readable: {exc}")
+            elif head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+                data = path.read_bytes()
+                for fourcc, body in _riff_chunks(data):
+                    if fourcc == b"ICCP":
+                        fields += icc.fields(body)
+                state = None
+                if _container_kind(path) == "webp":
+                    try:
+                        state = _WebpState.load(data)
+                    except jpeg_segments.JpegFormatError as exc:
+                        warnings.append(f"{exc}: metadata is shown but read-only")
+                if state is not None:
+                    errors += state.errors
+                    warnings += state.warnings
+                    reason = state.read_only_reason()
+                    if reason:
+                        warnings.append(reason)
+                    writable = True
+                    fields += self._state_fields(state, writable and not reason)
+                else:
+                    for fourcc, body in _riff_chunks(data):
+                        if fourcc == b"EXIF":
+                            fields += self._exif_bytes_fields(_strip_exif_header(body), errors)
+                        elif fourcc == b"XMP ":
+                            try:
+                                fields += _xmp_fields(xmp.XmpPacket(body), False)
+                            except xmp.XmpFormatError as exc:
+                                warnings.append(f"XMP not readable: {exc}")
+            elif head[4:12] == b"ftypcrx " or (suffix == ".cr3" and head[4:8] == b"ftyp"):
+                fields += _cr3_fields(path, warnings)
+            elif head[:15] == b"FUJIFILMCCD-RAW":
+                fields += _raf_fields(path, warnings)
             elif suffix in _READ_ONLY_EXTS:
                 warnings.append("EXIF of this RAW format is not read")
         except Exception as exc:  # read never raises: unexpected data is a read error, read-only
@@ -913,7 +1543,7 @@ class ImageHandler(BaseMetadataHandler):
             writable = False
         record = self._make_record(path, read_errors=errors, warnings=warnings,
                                    supports_write=writable, supports_delete=writable)
-        if reason and _jpeg_name(path) and not errors:
+        if reason and _container_kind(path) and not errors:
             record.read_only_reason = reason
         record.fields = fields
         if not writable or errors:
@@ -989,31 +1619,43 @@ class ImageHandler(BaseMetadataHandler):
             fields += _xmp_fields(state.xmp, writable and state.xmp_writable)
         if state.iim is not None:
             fields += _iptc_fields(state, writable and state.iptc_writable)
+        if isinstance(state, _PngState):
+            fields += _png_text_fields(state.png, writable)
+        if isinstance(state, _TiffState):
+            fields += _tiff_iptc_block(state.buf, writable)
+            _tiff_deletable(fields, writable)
         return fields
 
-    def _tiff_fields(self, path: Path, errors: list[str]) -> list[MetadataField]:
+    def _tiff_fields(self, path: Path, errors: list[str], writable: bool = False) -> list[MetadataField]:
         try:
             with open(path, "rb") as fh, mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ) as mm:
                 block = exif_codec.parse(mm, with_ifd1=False, raw=True)
         except (exif_codec.ExifFormatError, OSError, ValueError) as exc:
             errors.append(f"EXIF read error: {exc}")
             return []
-        fields = _exif_fields(block, False)
+        fields = _exif_fields(block, writable)
         entries = block.ifds["0th"]
         if 34675 in entries:                      # embedded ICC profile
             fields += icc.fields(entries[34675].data)
         if 700 in entries:                        # XMP packet (Lightroom, many editors)
             try:
-                fields += _xmp_fields(xmp.XmpPacket(entries[700].data), False)
+                fields += _xmp_fields(xmp.XmpPacket(entries[700].data), writable)
             except xmp.XmpFormatError:
                 pass                              # the raw packet stays visible as its binary field
         if 33723 in entries:                      # IPTC-NAA (IIM) record
+            if writable:
+                fields += _tiff_iptc_block(Path(path).read_bytes(), True)
             try:
                 datasets, _ = iptc.parse_iim(entries[33723].data)
                 utf8 = iptc.charset_marker(datasets) in (None, iptc.UTF8_MARKER)
-                fields += _iptc_fields(SimpleNamespace(iim=datasets, iptc_utf8=utf8), False)
+                datasets_fields = _iptc_fields(SimpleNamespace(iim=datasets, iptc_utf8=utf8), False)
+                for f in datasets_fields:
+                    f.computed = True              # they disappear with the record
+                fields += datasets_fields
             except iptc.IptcFormatError:
                 pass
+        if writable:
+            _tiff_deletable(fields, True)
         return fields
 
     def _exif_bytes_fields(self, data: bytes, errors: list[str]) -> list[MetadataField]:
@@ -1029,17 +1671,48 @@ class ImageHandler(BaseMetadataHandler):
         except MetadataValueError:
             return False
 
+    def content_digest(self, path: Path) -> str | None:
+        """SHA-256 of the picture data: JPEG scan data, PNG image chunks, WebP bitstream chunks."""
+        import hashlib
+        data = Path(path).read_bytes()
+        digest = hashlib.sha256()
+        if jpeg_segments.is_jpeg(data[:4]):
+            try:
+                digest.update(_JpegState.load(data, tolerant=True).jpeg.tail)
+            except jpeg_segments.JpegFormatError:
+                return None
+        elif data[:8] == _PNG_SIGNATURE:
+            for ctype, body in _png_chunks(data):
+                if ctype in (b"IHDR", b"PLTE", b"tRNS", b"IDAT", b"acTL", b"fcTL", b"fdAT"):
+                    digest.update(ctype + body)
+        elif data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+            for fourcc, body in _riff_chunks(data):
+                if fourcc in (b"VP8 ", b"VP8L", b"ALPH", b"ANMF"):
+                    digest.update(fourcc + body)
+        elif data[:4] in (b"II*\x00", b"MM\x00*") or data[:4] in exif_codec.RAW_MAGICS:
+            return tiff_inplace.media_digest(data)
+        else:
+            return None
+        return digest.hexdigest()
+
     # ── schema ──
     def writable_fields(self, path: Path, record: MetadataRecord) -> list[MetadataField]:
-        if not _jpeg_name(path) or record.read_errors:
+        if not _container_kind(path) or record.read_errors:
             return []
         try:
-            state = _JpegState.load(Path(path).read_bytes())
+            state = _state_for(Path(path).read_bytes())
         except (jpeg_segments.JpegFormatError, OSError):
             return []
         if state.errors or state.read_only_reason():
             return []
-        return self._addable(state, {f.key for f in record.fields})
+        addable = self._addable(state, {f.key for f in record.fields})
+        return self._tiff_addable(addable) if isinstance(state, _TiffState) else addable
+
+    @staticmethod
+    def _tiff_addable(addable: list[MetadataField]) -> list[MetadataField]:
+        """Of the metadata that can be added, what a TIFF-structured block may take."""
+        return [f for f in addable if f.key.startswith("xmp:") or
+                ((where := exif_codec.parse_key(f.key)) is not None and tiff_inplace.editable(*where))]
 
     def _addable(self, state: _JpegState, present: set[str]) -> list[MetadataField]:
         out: list[MetadataField] = []
@@ -1219,15 +1892,20 @@ class ImageHandler(BaseMetadataHandler):
 
     def restore(self, tmp: Path, snap: Snapshot) -> None:
         state = self._load_for_mutation(tmp)
-        groups: dict[str, list] = {"exif": [], "xmp": [], "iptc": []}
+        groups: dict[str, list] = {"exif": [], "xmp": [], "iptc": [], "png": []}
         for key, raw in snap.items():
             groups[_namespace(key)].append((key, raw))
         for key, raw in groups["exif"]:
             self._put_raw(state, key, raw)
         if groups["xmp"]:
             self._restore_xmp(state, groups["xmp"])
-        if groups["iptc"]:
+        if isinstance(state, _TiffState):
+            for key, raw in groups["iptc"]:
+                self._put_raw(state, key, raw)                 # the whole IPTC record
+        elif groups["iptc"]:
             self._restore_iptc(state, groups["iptc"])
+        for key, raw in groups["png"]:
+            self._put_raw(state, key, raw)
         for ns, items in groups.items():
             carrier = next((raw for _, raw in items if isinstance(raw, _SegmentRaw) and raw.segment is not None),
                            None)
@@ -1263,7 +1941,14 @@ class ImageHandler(BaseMetadataHandler):
         batch = []
         for key, raw in items:
             raw = _unwrap(raw)
-            if raw is ABSENT:
+            if key == XMP_HIDDEN_KEY:
+                if raw is ABSENT:
+                    if state.xmp is not None:
+                        for uri, local in _xmp_hidden(state.xmp):
+                            batch.append((uri, local, None))
+                else:
+                    batch.extend((uri, local, occurrences) for uri, local, occurrences in raw[3])
+            elif raw is ABSENT:
                 name = self._xmp_name(state, key)
                 if name is not None:
                     batch.append((*name, None))
@@ -1297,12 +1982,12 @@ class ImageHandler(BaseMetadataHandler):
         state.touched.add("iptc")
 
     def write(self, path: Path, fields: list[MetadataField]) -> None:
-        if not _jpeg_name(path):
+        if not _container_kind(path):
             raise NotImplementedError(f"Metadata write not supported for {path.suffix}")
         self._atomic_write(path, lambda tmp: self.apply_write(tmp, fields))
 
     def delete(self, path: Path, keys: list[str]) -> None:
-        if not _jpeg_name(path):
+        if not _container_kind(path):
             raise NotImplementedError(f"Metadata delete not supported for {path.suffix}")
         self._atomic_write(path, lambda tmp: self.apply_delete(tmp, keys))
 
@@ -1310,9 +1995,9 @@ class ImageHandler(BaseMetadataHandler):
     @staticmethod
     def _load_for_mutation(path: Path) -> _JpegState:
         try:
-            state = _JpegState.load(Path(path).read_bytes())
+            state = _state_for(Path(path).read_bytes())
         except jpeg_segments.JpegFormatError as exc:
-            raise MetadataValueError(None, ErrorCode.UNSUPPORTED, f"JPEG structure error: {exc}") from exc
+            raise MetadataValueError(None, ErrorCode.UNSUPPORTED, str(exc)) from exc
         if state.errors:
             raise MetadataValueError(None, ErrorCode.UNSUPPORTED, "; ".join(state.errors))
         reason = state.read_only_reason()
@@ -1385,6 +2070,10 @@ class ImageHandler(BaseMetadataHandler):
         return _SegmentRaw(raw, payload, index)
 
     def _raw_value(self, state: _JpegState, key: str) -> Any:
+        if isinstance(state, _TiffState) and (key.startswith(("exif:", "gps:")) or key == IPTC_BLOCK_KEY):
+            where = ("0th", 33723) if key == IPTC_BLOCK_KEY else exif_codec.parse_key(key)
+            saved = tiff_inplace.snapshot(state.buf, *where) if where else None
+            return ("tiff", saved) if saved is not None else ABSENT
         if key.startswith(("exif:", "gps:")):
             where = exif_codec.parse_key(key)
             if where is None:
@@ -1393,6 +2082,12 @@ class ImageHandler(BaseMetadataHandler):
             if entry is None:
                 return ABSENT
             return ("exif", state.exif.byteorder, entry.tag, entry.type, entry.count, entry.data)
+        if key == XMP_HIDDEN_KEY:
+            hidden = _xmp_hidden(state.xmp) if state.xmp is not None else []
+            if not hidden:
+                return ABSENT
+            kept = tuple((uri, local, state.xmp.raw(uri, local)) for uri, local in hidden)
+            return _PositionedRaw(("xmp", XMP_HIDDEN_KEY, None, kept), ("xmp-hidden", tuple(hidden)))
         if key.startswith("xmp:"):
             name = self._xmp_name(state, key)
             raw = state.xmp.raw(*name) if state.xmp is not None and name else None
@@ -1408,10 +2103,28 @@ class ImageHandler(BaseMetadataHandler):
             if not occ:
                 return ABSENT
             return _PositionedRaw(("iptc", tuple(occ)), ("iptc", tuple(data for _, data in occ)))
+        if key.startswith("png:") and isinstance(state, _PngState):
+            found = [(i, bytes(c[0]), bytes(c[1])) for i, c in enumerate(state.png.chunks)
+                     if _png_text_key(c) == key]
+            return ("png", tuple(found)) if found else ABSENT
         raise MetadataValueError(key, ErrorCode.UNKNOWN_FIELD)
 
     def _put_raw(self, state: _JpegState, key: str, raw: Any) -> None:
         raw = _unwrap(raw)
+        if isinstance(state, _TiffState) and (key.startswith(("exif:", "gps:")) or key == IPTC_BLOCK_KEY):
+            where = ("0th", 33723) if key == IPTC_BLOCK_KEY else exif_codec.parse_key(key)
+            if where is None or not (tiff_inplace.editable(*where) or where == ("0th", 33723)):
+                raise MetadataValueError(key, ErrorCode.NOT_DELETABLE)
+            try:
+                if raw is ABSENT:
+                    if tiff_inplace.remove(state.buf, where[0], {where[1]}, force=True):
+                        state.touched.add("tiff")
+                else:
+                    tiff_inplace.put_entry(state.buf, raw[1])
+                    state.touched.add("tiff")
+            except tiff_inplace.TiffError as exc:
+                raise MetadataValueError(key, ErrorCode.LOSSY_WRITE, f"{key}: {exc}") from exc
+            return
         if key.startswith(("exif:", "gps:")):
             if not state.exif_writable:
                 raise MetadataValueError(key, ErrorCode.READ_ONLY)
@@ -1426,6 +2139,17 @@ class ImageHandler(BaseMetadataHandler):
             entry = exif_codec.swap_entry(exif_codec.Entry(rtag, typ, count, data), bo, state.exif.byteorder)
             state.exif.ifds[ifd][tag] = entry
             state.touched.add("exif")
+            return
+        if key == XMP_HIDDEN_KEY:
+            if not state.xmp_writable:
+                raise MetadataValueError(key, ErrorCode.READ_ONLY)
+            if raw is ABSENT:
+                if state.xmp is not None:
+                    for uri, local in _xmp_hidden(state.xmp):
+                        state.xmp.remove(uri, local)
+                    state.touched.add("xmp")
+                return
+            self._restore_xmp(state, [(key, raw)])
             return
         if key.startswith("xmp:"):
             if not state.xmp_writable:
@@ -1451,6 +2175,15 @@ class ImageHandler(BaseMetadataHandler):
                     iptc.insert_at(state.iim, iptc.Dataset(record, number, data), index)
             if removed is not None or raw is not ABSENT:
                 state.touched.add("iptc")
+            return
+        if key.startswith("png:") and isinstance(state, _PngState):
+            wanted = [i for i, c in enumerate(state.png.chunks) if _png_text_key(c) == key]
+            for i in reversed(wanted):
+                del state.png.chunks[i]
+            if raw is not ABSENT:
+                state.png.put_text([(index, [kind, body]) for index, kind, body in raw[1]])
+            if wanted or raw is not ABSENT:
+                state.touched.add("png")
             return
         raise MetadataValueError(key, ErrorCode.UNKNOWN_FIELD)
 
@@ -1485,8 +2218,10 @@ def _new_exif_schema(ifd: str, tag: int) -> MetadataField | None:
     field_type = {"datetime": "localdatetime", "int": "int", "rational": "rational"}.get(kind, "str")
     if choices:
         field_type = "enum"
+    triple = (ifd, tag) in (("GPS", 2), ("GPS", 4))                 # degrees, minutes, seconds
     return MetadataField(key, label, None, source="gps" if ifd == "GPS" else "exif",
-                         field_type=field_type, choices=list(choices or []))
+                         field_type=field_type, choices=list(choices or []),
+                         multi=triple, length=3 if triple else None)
 
 
 def _canonical_exif(field: MetadataField, value: Any) -> Any:

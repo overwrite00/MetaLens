@@ -14,10 +14,11 @@ Learn how to browse files, inspect and edit metadata, compute hashes, and compar
 3. [📄 Select a File](#-select-a-file)
 4. [👁️ View Metadata](#-view-metadata)
 5. [✏️ Edit Metadata](#-edit-metadata)
-6. [🗑️ Delete Metadata Fields](#-delete-metadata-fields)
-7. [🔑 Compute File Hashes](#-compute-file-hashes)
-8. [⚖️ Compare Two Files (Diff)](#-compare-two-files-diff)
-9. [↩️ Undo](#-undo)
+6. [🛡️ Prepare a File for Sharing](#-prepare-a-file-for-sharing)
+7. [🗑️ Delete Metadata Fields](#-delete-metadata-fields)
+8. [🔑 Compute File Hashes](#-compute-file-hashes)
+9. [⚖️ Compare Two Files (Diff)](#-compare-two-files-diff)
+10. [↩️ Undo](#-undo)
 
 ---
 
@@ -61,6 +62,18 @@ Switch to the **Edit** tab to open `MetadataEditor`:
 - **Add field** offers the fields the format can store but the file does not have yet (e.g. an ID3 title on an untagged WAV, an XMP keyword list on a JPEG)
 - **Save** sends all edits, additions and deletions as **one** save. The sidecar validates every value first (invalid values are reported next to their field and nothing is written), applies the changes to a private copy next to the file, reads the copy back to check that exactly the requested changes were stored, and only then replaces the original (`ReplaceFileW` on Windows, keeping the security descriptor, alternate data streams and attributes such as *hidden*; `os.replace` elsewhere). A failure at any step leaves the original untouched. The file is replaced by a new one, so hard links to it are detached
 - When the format metadata is read-only (e.g. RAW, TIFF/PNG/WebP/GIF, AAC, MKV/AVI, legacy `.doc`/`.xls`/`.ppt`, encrypted or digitally signed PDFs, signed Office packages), the Edit tab shows a **read-only** notice with the reason; filesystem fields such as the modification time (`fs:mtime`) stay editable
+
+---
+
+## 🛡️ Prepare a File for Sharing
+
+The **Share** tab removes what a file reveals before you send it to someone.
+
+1. Choose a preset (*Remove location*, *Remove personal data*, *Remove everything shown*) or tick the categories: location, identity, device, thumbnail, history (edit history and other data that is stored but not shown), free text, dates, software.
+2. The preview lists the fields that will be removed and those that cannot be removed from this kind of file, with the reason.
+3. *Remove* saves once; the change can be undone.
+
+The **Batch** button of the file list (select files with Ctrl/Shift) applies the same to many files and also: shifts dates, copies metadata of the first selected file to the others, adds a position (latitude and longitude, or the position along a GPX track by capture time), renames from metadata and exports the metadata of the folder to CSV or JSON. Every action previews first and every file is saved and undone on its own. The search box above the metadata table finds fields by name, another common name or value.
 
 ---
 

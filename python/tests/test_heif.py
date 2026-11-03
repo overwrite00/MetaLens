@@ -26,8 +26,9 @@ def test_heic_exif_xmp_icc_and_size(tmp_path):
     assert keys["exif:Make"].value == "Canon" and keys["gps:Latitude"].value
     assert keys["xmp:dc:title"].value == "Titolo è"
     assert keys["icc:Description"].value == "MetaLens test RGB"
-    assert not record.format_supports_write and record.read_only_reason
-    assert not any(f.editable or f.deletable for f in record.fields)
+    assert record.format_supports_write and record.format_supports_delete
+    assert keys["exif:Artist"].editable and not keys["img:width"].editable
+    assert keys["gps:Latitude"].deletable and keys["xmp:dc:title"].deletable and not keys["img:width"].deletable
 
 
 def test_avif_is_recognized(tmp_path):
