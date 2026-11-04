@@ -82,9 +82,7 @@ File (image / audio / video / document / anything)
 
 ## 🔧 Version
 
-**v0.3.5** (latest stable) — Security and reliability release: every sidecar API call is authenticated with a per-session token, the Electron renderer is sandboxed with a Content Security Policy, PDF/Office edits preserve unrelated content, audio/video edits are atomic, and Undo restores original values. Dependencies updated (Pillow, pypdf, Vite, Electron). No API changes.
-
-**Next: 0.4.0** (in development, not yet released) — update check and repository link in *About*; XMP and IPTC reading and writing for JPEG; typed values (lists, numbers, dates, exact rationals) instead of joined strings; adding fields; exact server-side Undo; uniform API errors; Linux packages built on a RHEL 9 baseline (Ubuntu 22.04+, Debian 12+, Fedora, RHEL 9/10).
+The badges at the top of this page always show the latest stable and beta releases.
 
 📖 **See full version history** → [CHANGELOG.md](./CHANGELOG.md)
 
@@ -258,5 +256,5 @@ Distributed with MIT License · [View License](LICENSE)
 
 ---
 
-*Last updated: 2026-11-03*
+*Last updated: 2026-11-04*
 *← [Requirements](docs/REQUIREMENTS.md) | [Docs →](docs/)*
