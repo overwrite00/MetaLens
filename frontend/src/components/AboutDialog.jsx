@@ -32,7 +32,7 @@ function UpdateSection({ updates }) {
             {update.ignored && <span className="ml-2 text-[10px] text-cyber-muted">(ignored)</span>}
           </div>
           {update.notes && (
-            <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words text-[10px]
+            <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words text-[10px]
               leading-relaxed text-cyber-muted font-mono bg-cyber-bg/60 rounded p-2">{update.notes}</pre>
           )}
 
@@ -105,7 +105,7 @@ export function AboutDialog({ onClose, updates }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={onClose}>
       <div role="dialog" aria-label="About MetaLens"
-        className="relative bg-cyber-panel border border-cyber-cyan/30 rounded-lg p-8 w-96 max-w-[95vw]
+        className="relative bg-cyber-panel border border-cyber-cyan/30 rounded-lg p-8 w-[42rem] max-w-[95vw]
         max-h-[95vh] overflow-y-auto shadow-[0_0_40px_#00d4ff20] text-center"
         onClick={e => e.stopPropagation()}>
 

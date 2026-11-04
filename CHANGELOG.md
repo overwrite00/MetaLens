@@ -96,6 +96,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - Development dependency `minimatch` (used by the packaging tools) updated to 11.0.4 where the packager uses it.
 
 ### Changed
+- The About window is wider (and shows longer release notes), so it no longer looks narrow and tall when an update is available.
 - Keys: `png:XML:com.adobe.xmp` is replaced by the `xmp:` fields it contains; PNG text in several languages
   is `png:<keyword>@<language>` instead of `png:<keyword>#2`; files without an extension use their format's
   keys (e.g. `exif:*`) instead of `hachoir:*`; MKV and WebM files use `mkv:*` keys instead of `hachoir:*`.
