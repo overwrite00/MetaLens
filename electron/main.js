@@ -9,6 +9,7 @@ const { isTrustedFrame, secureWindow } = require('./security-policy')
 const { waitForSidecar } = require('./sidecar-health')
 const { handleSquirrelEvent } = require('./squirrel-events')
 const { spawnTree, killProcessTree } = require('./process-tree')
+const { createShutdown } = require('./shutdown')
 const { buildMenuTemplate } = require('./menu')
 const {
   REPO_URL, checkForUpdates, downloadAsset, cleanupStaleDownloads, createSettingsStore,
@@ -103,6 +104,13 @@ async function startSidecar() {
   }
 }
 
+const shutdown = createShutdown({
+  app,
+  stopSidecar: () => stopSidecar(),
+  cancelDownload: () => installAbort?.abort(),
+  closeWindows: () => BrowserWindow.getAllWindows().forEach(win => win.destroy()),
+})
+
 function stopSidecar() {
   if (sidecarProcess) {
     killProcessTree(sidecarProcess)
@@ -196,6 +204,9 @@ function setupIPC() {
   handle('get-sidecar-connection', () => ({ port: sidecarPort, token: sidecarToken }))
 
   handle('get-app-version', () => app.getVersion())
+
+  // Exit button: stop everything the app started, then quit (the renderer passes nothing)
+  handle('quit-app', () => { shutdown.quit() })
 
   handle('open-repo', () => shell.openExternal(REPO_URL))
   handle('updates-get-settings', () => settingsStore.get())
@@ -306,4 +317,6 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
+app.on('before-quit', stopSidecar)
 app.on('will-quit', stopSidecar)
+process.on('exit', stopSidecar)      // last resort: never leave the sidecar running after the app is gone

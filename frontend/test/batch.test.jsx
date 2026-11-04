@@ -10,7 +10,7 @@ vi.mock('../src/api/client', () => ({
 const paths = ['C:/p/a.jpg', 'C:/p/b.jpg']
 const previewBody = { ok: true, results: [
   { path: paths[0], ok: true, will_remove: [{ key: 'gps:Latitude' }], remaining: [], undo_token: null },
-  { path: paths[1], ok: false, detail: 'file is read-only' },
+  { path: paths[1], ok: false, status: 403, errors: [{ code: 'not_writable', key: null, message: 'file is read-only' }] },
 ], undo_tokens: [] }
 
 beforeEach(() => { vi.resetAllMocks() })

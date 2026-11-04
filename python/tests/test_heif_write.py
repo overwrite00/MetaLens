@@ -1,7 +1,8 @@
 """Editing and adding metadata in HEIC / AVIF files."""
 import pytest
 
-from core.handlers.heif_handler import HeifHandler, metadata_layout
+from core.handlers.heif_handler import HeifHandler
+from core.heif import metadata_layout
 from core.registry import HandlerRegistry
 from tests.factories import heif
 

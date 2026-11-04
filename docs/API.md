@@ -217,6 +217,7 @@ still present after the save). `removed` is only present when `preview` is `fals
 
 The first three answer `{ok, preview, results: [{path, ok, ..., undo_token}], undo_tokens}`: every file is its own
 verified save with its own Undo token, a failing file does not stop the others (they are not atomic across files).
+A failed file is `{path, ok: false, status, errors: [{code, key, message}]}` (no `detail`; the UI joins the messages).
 At most 500 files per request (2000 for the export). `preview` defaults to `true` and changes nothing.
 The rename template accepts `{name}`, `{ext}` and `{key}` / `{key|strftime}` for date-time keys, never replaces an existing
 file (409) and cannot be undone. CSV cells that start with a formula character are prefixed with `'`.
@@ -460,5 +461,5 @@ persisted anywhere (the Undo journal is in memory), so they may change between v
 
 ---
 
-*Last updated: 2026-11-03*
+*Last updated: 2026-11-04*
 *← [Usage](./USAGE.md) | [Back to README →](../README.md)*

@@ -31,7 +31,8 @@ def test_removal_and_restoration_are_exact_for_every_entry(tmp_path):
                 continue
             data = bytearray(original)
             saved = tiff_inplace.snapshot(data, name, entry.tag)
-            assert tiff_inplace.remove(data, name, {entry.tag}) == 1
+            removed = tiff_inplace.remove(data, name, {entry.tag})
+            assert removed == 1
             assert len(data) == len(original)
             assert tiff_inplace.snapshot(data, name, entry.tag) is None
             tiff_inplace.insert(data, saved)

@@ -39,6 +39,7 @@ async def test_the_author_and_the_company_are_removed_from_the_file_and_undo_is_
     assert "ole:author" not in left and "ole:last_author" not in left and "ole:company" not in left
     data = path.read_bytes()
     assert len(data) == len(original)
+    assert secret not in data                                    # the name is gone from the bytes, not only from the listing
     assert (await client.post("/undo", json={"token": body["undo_token"]})).status_code == 200
     assert path.read_bytes() == original
 

@@ -1,6 +1,4 @@
 """HEIC / AVIF reading (core/handlers/heif_handler.py)."""
-import pytest
-
 from core.registry import HandlerRegistry
 from tests.factories import by_name, heif
 

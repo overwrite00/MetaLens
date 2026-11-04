@@ -11,6 +11,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getPort: () => ipcRenderer.invoke('get-port'),
   getSidecarConnection: () => ipcRenderer.invoke('get-sidecar-connection'),
 
+  // Exit button: stops the sidecar and quits the whole app
+  quitApp: () => ipcRenderer.invoke('quit-app'),
+
   // Packaged app version (reflects beta suffix, unlike the sidecar's /health version)
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 

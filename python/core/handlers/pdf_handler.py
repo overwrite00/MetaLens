@@ -414,7 +414,7 @@ def _xmp_stream_fields(root, removable: bool) -> list[MetadataField]:
         for f in out:
             f.computed = True          # they disappear with the stream
     except core_xmp.XmpFormatError:
-        pass
+        pass  # a malformed XMP stream is reported elsewhere; here it just adds no fields
     stream = MetadataField.binary_field(XMP_STREAM_KEY, "XMP metadata stream", data, mime="application/rdf+xml",
                                         deletable=removable, source="pdf")
     stream.computed = True          # the entries of the information dictionary are mirrored into it

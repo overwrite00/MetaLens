@@ -5,7 +5,7 @@ import struct
 from pathlib import Path
 
 from . import registrar
-from .hachoir import MKV_DATE_NS, _el, _uint, mkv_bytes
+from .hachoir import MKV_DATE_NS, _el, _uint
 
 SAMPLES: list = []
 sample = registrar(SAMPLES, __name__)

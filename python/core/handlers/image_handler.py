@@ -42,6 +42,7 @@ from typing import Any
 from core import exif_codec, icc, image_containers, iptc, jpeg_segments, makernote, sniff, tiff_inplace, values, xmp
 from core.base_handler import ABSENT, BaseMetadataHandler, Snapshot
 from core.errors import ErrorCode, MetadataValueError, MetadataValueErrors
+from core.heif import is_heif_brand, metadata_layout
 from core.models import MetadataField, MetadataRecord
 
 _READ_ONLY_EXTS = frozenset({".cr2", ".nef", ".arw", ".dng", ".orf", ".rw2", ".pef", ".srw",
@@ -783,7 +784,6 @@ class _HeifState(_TiffState):
 
     @classmethod
     def load(cls, data: bytes, *, tolerant: bool = False) -> "_HeifState":
-        from core.handlers.heif_handler import metadata_layout
         layout = metadata_layout(data)
         if not layout:
             raise jpeg_segments.JpegFormatError("HEIF structure error: no Exif or XMP item stored in one piece")
@@ -924,7 +924,6 @@ def _state_for(data: bytes) -> "_JpegState":
     if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
         return _WebpState.load(data)
     if data[4:8] == b"ftyp":
-        from core.handlers.heif_handler import is_heif_brand
         return _HeifState.load(data) if is_heif_brand(data) else _Mp4State.load(data)
     if data[:4] in (b"II*\x00", b"MM\x00*") or data[:4] in exif_codec.RAW_MAGICS:
         return _TiffState.load(data)
@@ -1686,7 +1685,7 @@ class ImageHandler(BaseMetadataHandler):
                     f.computed = True              # they disappear with the record
                 fields += datasets_fields
             except iptc.IptcFormatError:
-                pass
+                pass  # unreadable datasets: the block itself is still listed
         if writable:
             _tiff_deletable(fields, True)
         return fields

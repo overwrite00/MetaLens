@@ -1,7 +1,6 @@
 """Batch preparation, date shift, tag copy, export and rename (api/operations.py)."""
 import csv
 import io
-import json
 
 import pytest
 
@@ -25,6 +24,8 @@ async def test_batch_preparation_reports_every_file_and_keeps_going(client, tmp_
     paths = [str(good[0]), str(tmp_path / "missing.jpg"), str(good[1])]
     preview = (await client.post("/sanitize-many", json={"paths": paths, "categories": ["identity", "location"]})).json()
     assert [r["ok"] for r in preview["results"]] == [True, False, True] and preview["undo_tokens"] == []
+    failed = preview["results"][1]                   # a failed file carries structured errors, never exception text
+    assert "detail" not in failed and failed["errors"] and set(failed["errors"][0]) == {"code", "key", "message"}
     body = (await client.post("/sanitize-many", json={"paths": paths, "categories": ["location", "identity"],
                                                       "preview": False})).json()
     assert [r["ok"] for r in body["results"]] == [True, False, True]

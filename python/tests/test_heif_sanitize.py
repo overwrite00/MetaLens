@@ -1,7 +1,8 @@
 """Removing EXIF / GPS / XMP from HEIC and AVIF files in place."""
 import pytest
 
-from core.handlers.heif_handler import HeifHandler, metadata_ranges
+from core.handlers.heif_handler import HeifHandler
+from core.heif import metadata_ranges
 from core.registry import HandlerRegistry
 from tests.factories import heif
 

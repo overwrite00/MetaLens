@@ -14,6 +14,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - [ ] **Search/Filter Bar** — Filter the file list by name or extension
 
 ### Added
+- **Exit button.** An **Exit** button at the right of the toolbar closes MetaLens: it stops the background
+  process that reads and writes the metadata (with everything it started), cancels a download in progress and
+  releases its memory and port. It waits while a save is in progress. (**File → Quit** does the same.)
 - **Add a position.** The Batch dialog puts a latitude and longitude on the selected pictures, or looks up the
   position of each picture by its capture time along a GPX track (with a camera-clock offset and a maximum gap);
   pictures of formats that cannot hold a position are reported. GPS entries can now also be added by hand.
@@ -85,6 +88,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - **Files without an extension** are recognized from their content and handled like their format (a JPEG
   named `photo` can now be read and edited like a `.jpg`).
 
+### Security
+- The Batch operations (prepare for sharing, shift dates, copy tags, add a position) no longer return the text of
+  an internal error for a file that failed: each failed file carries its structured `errors` list only (the
+  `detail` field of those results is gone).
+- GitHub Actions: the package smoke-test jobs now run with read-only repository permissions.
+- Development dependency `minimatch` (used by the packaging tools) updated to 11.0.4 where the packager uses it.
+
 ### Changed
 - Keys: `png:XML:com.adobe.xmp` is replaced by the `xmp:` fields it contains; PNG text in several languages
   is `png:<keyword>@<language>` instead of `png:<keyword>#2`; files without an extension use their format's
@@ -92,6 +102,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 - The temporary copy used while saving now has the same name as the file (inside the private temporary folder).
 - A tag editor that cannot open a movie shows its structure read-only instead of reporting a read error.
 - An Exif 3.0 UTF-8 text tag no longer makes the whole EXIF block non-rewritable.
+- Code quality: circular imports between the image and HEIC handlers removed, unused code and empty error
+  handlers cleaned up, a few tests strengthened (they now compare the restored bytes after Undo).
 
 ---
 

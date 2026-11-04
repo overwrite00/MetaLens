@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 from api import routes
 from api.routes import ApiCode, ApiError, PATH_LOCKS, SanitizeRequest, stable_read
 from core import values
-from core.errors import ErrorCode, MetadataValueErrors
+from core.errors import ErrorCode, MetadataValueErrors, error_entry
 from core.models import MetadataField
 from core.path_security import PathSecurityError, validate_directory_path
 
@@ -30,14 +30,23 @@ MAX_FILES = 500
 MAX_EXPORT_FILES = 2000
 
 
+def _entries(errors: list[dict]) -> list[dict]:
+    """Copy of ``errors`` rebuilt from its three fields (code, key, message): nothing else of the
+    exception travels into the response."""
+    return [error_entry(str(e.get("code", "")), e.get("key"), str(e.get("message", ""))) for e in errors]
+
+
 def _item(path: str, work) -> dict[str, Any]:
-    """Result of ``work()`` for one file: ``{"path", "ok", ...}``; an error never stops the batch."""
+    """Result of ``work()`` for one file: ``{"path", "ok", ...}``; an error never stops the batch.
+
+    A failed item carries only the status and the structured ``errors`` list (the UI builds the
+    summary from their messages); the text of the exception itself is never returned."""
     try:
         return {"path": path, "ok": True, **work()}
     except ApiError as exc:
-        return {"path": path, "ok": False, "status": exc.status, "errors": exc.errors, "detail": exc.detail}
+        return {"path": path, "ok": False, "status": exc.status, "errors": _entries(exc.errors)}
     except MetadataValueErrors as exc:
-        return {"path": path, "ok": False, "status": 422, "errors": exc.to_dicts(), "detail": str(exc)}
+        return {"path": path, "ok": False, "status": 422, "errors": _entries(exc.to_dicts())}
 
 
 def _paths(paths: list[str]) -> list[str]:

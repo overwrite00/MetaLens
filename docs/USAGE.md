@@ -19,6 +19,7 @@ Learn how to browse files, inspect and edit metadata, compute hashes, and compar
 8. [🔑 Compute File Hashes](#-compute-file-hashes)
 9. [⚖️ Compare Two Files (Diff)](#-compare-two-files-diff)
 10. [↩️ Undo](#-undo)
+11. [🚪 Exit MetaLens](#-exit-metalens)
 
 ---
 
@@ -121,6 +122,12 @@ MetaLens keeps an undo stack of your last **50** saves for the current session. 
 
 ---
 
+## 🚪 Exit MetaLens
+
+Click **Exit** at the right of the toolbar (or **File → Quit**, or close the window). MetaLens stops its background metadata process together with everything that process started, cancels any update download in progress and then closes, so no process or network port is left behind and the memory is released. The **Exit** button is disabled while a save is in progress. The undo stack is not kept: after you exit, saves can no longer be undone.
+
+---
+
 ## ℹ️ Checking Your Version
 
 Open **Help → About** to see the running app version (the packaged Electron app version, including any `-beta.N` suffix) — useful when reporting a bug. The dialog also links to the project repository on GitHub.
@@ -143,5 +150,5 @@ The preferences (auto-check on/off, ignored version) are stored in `settings.jso
 
 ---
 
-*Last updated: 2026-11-03*
+*Last updated: 2026-11-04*
 *← [Installation](./INSTALLATION.md) | [API Reference →](./API.md)*

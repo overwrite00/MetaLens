@@ -90,7 +90,7 @@ def fields(profile: bytes) -> list[MetadataField]:
         add("icc:CreationDate", "ICC Profile Date",
             values.format_datetime(datetime(year, month, day, hour, minute, second, tzinfo=timezone.utc)), "datetime")
     except ValueError:
-        pass
+        pass  # not a valid calendar date: the field is omitted
     platform = profile[40:44]
     if platform.strip(b"\x00"):
         add("icc:Platform", "ICC Primary Platform", _PLATFORMS.get(platform, _text(platform)))

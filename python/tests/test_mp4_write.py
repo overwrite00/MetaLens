@@ -1,7 +1,6 @@
 """Editing and adding QuickTime fields, text entries and XMP in MP4-family files."""
 import pytest
 
-from core.handlers import qt_edit
 from core.handlers.video_handler import VideoHandler
 from core.registry import HandlerRegistry
 from tests.factories import mp4

@@ -55,7 +55,7 @@ def fields(path: Path, writable: bool = True) -> tuple[list[MetadataField], list
                                   values.format_datetime(_EPOCH_2001 + timedelta(microseconds=nanos // 1000)),
                                   "datetime", deletable=editable))
             except OverflowError:
-                pass
+                pass  # a date outside the representable range is not shown
         scale = ebml._uint(buf, info[ebml.TIMECODE_SCALE]) if ebml.TIMECODE_SCALE in info else 1_000_000
         if ebml.DURATION in info:
             duration = ebml._float(buf, info[ebml.DURATION])

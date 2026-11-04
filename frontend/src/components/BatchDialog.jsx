@@ -33,7 +33,7 @@ function Results({ response, describe }) {
       {response.results.map(r => (
         <li key={r.path} className={r.ok ? '' : 'text-cyber-danger'}>
           <span className="text-cyber-cyan">{baseName(r.path)}</span>{' '}
-          {r.ok ? describe(r, response.preview) : `not done: ${r.detail}`}
+          {r.ok ? describe(r, response.preview) : `not done: ${(r.errors ?? []).map(e => e.message).join('; ') || 'error'}`}
         </li>
       ))}
     </ul>

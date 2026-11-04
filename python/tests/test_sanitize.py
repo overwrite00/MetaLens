@@ -47,6 +47,7 @@ async def test_location_is_removed_and_undo_restores_it(client, tmp_path):
     undo = await client.post("/undo", json={"token": body["undo_token"]})
     assert undo.status_code == 200
     assert any(k.startswith("gps:") for k in _keys(path))
+    assert path.read_bytes() == original                       # the Undo gives the original bytes back
 
 
 @pytest.mark.asyncio
@@ -113,3 +114,4 @@ async def test_hidden_xmp_data_is_listed_removed_and_restored_by_undo(client, tm
     assert "xmp:@hidden" not in _keys(path) and body["remaining"] == []
     undo = await client.post("/undo", json={"token": body["undo_token"]})
     assert undo.status_code == 200 and "xmp:@hidden" in _keys(path)
+    assert path.read_bytes() == original

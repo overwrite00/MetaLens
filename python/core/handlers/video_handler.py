@@ -180,7 +180,7 @@ class VideoHandler(TagMutations, BaseMetadataHandler):
             state = _Mp4State.load(Path(path).read_bytes())
             out += ImageHandler()._addable(state, present)
         except Exception:
-            pass
+            pass  # a file that cannot be parsed simply offers no fields to add
         return out
 
     def writable_field(self, path: Path, key: str) -> MetadataField | None:

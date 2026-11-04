@@ -534,7 +534,9 @@ def simple_tiff(entries: list[tuple[int, int, bytes]]) -> bytes:
 
 
 def cr3_bytes() -> bytes:
-    from .mp4 import atom
+    def atom(name: bytes, payload: bytes) -> bytes:       # ISO box: size + type + payload
+        return struct.pack(">I", 8 + len(payload)) + name + payload
+
     cmt1 = simple_tiff([(0x010F, 2, b"Canon" + bytes(1)), (0x0110, 2, b"Canon EOS R5" + bytes(1)),
                         (0x013B, 2, b"Jane Doe" + bytes(1))])
     cmt2 = simple_tiff([(0x829A, 5, struct.pack("<II", 1, 250)), (0x8827, 3, struct.pack("<H", 400)),
