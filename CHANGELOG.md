@@ -9,9 +9,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ### Roadmap
 
-- [ ] **CSV/JSON Export** — Export metadata for the current file or folder
 - [ ] **Batch Edit** — Apply a field change to multiple selected files at once
 - [ ] **Search/Filter Bar** — Filter the file list by name or extension
+
+---
+
+## [0.5.0] — 2026-11-04
 
 ### Added
 - **Exit button.** An **Exit** button at the right of the toolbar closes MetaLens: it stops the background
