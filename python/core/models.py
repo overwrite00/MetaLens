@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from core import sensitivity
 from core.values import binary_descriptor
 
 
@@ -76,6 +77,7 @@ class MetadataField:
             "multi": self.multi,
             "length": self.length,
             "binary": self._serialize_value(self.binary),
+            "sensitivity": sensitivity.classify(self.key),
         }
 
     @staticmethod
@@ -169,6 +171,7 @@ class MetadataRecord:
             "format_supports_delete": self.format_supports_delete,
             "read_only_reason": self.read_only_reason,
             "addable_fields": [f.to_dict() for f in self.addable_fields],
+            "sensitivity_summary": sensitivity.summarize(f.key for f in self.fields),
         }
 
 

@@ -100,6 +100,33 @@ def stream_fields(info, prefix: str = "audio") -> list[MetadataField]:
     codec = getattr(info, "codec", None)
     if isinstance(codec, str) and codec:
         add(f"{prefix}:codec", "Codec", codec, "str")
+    # Format-specific stream details (MPEG audio, FLAC, Ogg): read-only, none changes with a tag write.
+    mpeg_version = getattr(info, "version", None)
+    layer = getattr(info, "layer", None)
+    if isinstance(mpeg_version, (int, float)) and not isinstance(mpeg_version, bool) and type(layer) is int:
+        add(f"{prefix}:mpeg_version", "MPEG Version", str(mpeg_version), "str")
+        add(f"{prefix}:mpeg_layer", "MPEG Layer", layer, "int")
+        mode = getattr(info, "mode", None)
+        if type(mode) is int:
+            add(f"{prefix}:channel_mode", "Channel Mode",
+                {0: "Stereo", 1: "Joint stereo", 2: "Dual channel", 3: "Mono"}.get(mode, str(mode)), "str")
+        if isinstance(getattr(info, "protected", None), bool):
+            add(f"{prefix}:crc_protected", "CRC Protected", info.protected, "bool")
+        bitrate_mode = getattr(info, "bitrate_mode", None)
+        if bitrate_mode is not None and getattr(bitrate_mode, "name", ""):
+            add(f"{prefix}:bitrate_mode", "Bitrate Mode", bitrate_mode.name, "str")
+        encoder = getattr(info, "encoder_info", None)
+        if isinstance(encoder, str) and encoder:
+            add(f"{prefix}:encoder", "Encoder", encoder, "str")
+    for attr, key, label in (("min_blocksize", "min_blocksize", "Min Block Size"),
+                             ("max_blocksize", "max_blocksize", "Max Block Size"),
+                             ("total_samples", "total_samples", "Total Samples")):
+        v = getattr(info, attr, None)
+        if type(v) is int and v > 0:
+            add(f"{prefix}:{key}", label, v, "int")
+    signature = getattr(info, "md5_signature", None)
+    if type(signature) is int and signature:
+        add(f"{prefix}:md5_signature", "Audio MD5", f"{signature:032x}", "str")
     return out
 
 
@@ -118,16 +145,29 @@ class AudioHandler(TagMutations, BaseMetadataHandler):
     def read(self, path: Path) -> MetadataRecord:
         fields: list[MetadataField] = []
         errors: list[str] = []
+        notes: list[str] = []
         writable = False
         try:
             import mutagen
+            import mutagen.mp4
             audio = mutagen.File(path, easy=False)
             if audio is None:
                 errors.append("mutagen could not parse file")
             else:
                 fields += stream_fields(audio.info, "audio")
+                if isinstance(audio, mutagen.mp4.MP4):
+                    from core.handlers.qt_fields import qt_fields
+                    try:
+                        structure, notes = qt_fields(path)
+                        fields += structure
+                    except Exception as e:     # extra information: never fail the read for it
+                        notes.append(f"QuickTime structure not read ({type(e).__name__})")
                 codec = codec_for(audio)
                 writable = codec is not None and isinstance(audio, _writable_classes())
+                vendor = getattr(audio.tags, "vendor", None)
+                if isinstance(vendor, str) and vendor:
+                    fields.append(MetadataField("audio:vendor", "Encoder Vendor", vendor, raw_value=vendor,
+                                                editable=False, deletable=False, source="audio", computed=True))
                 if codec is not None:
                     tag_fields = codec.fields()
                     if not writable:
@@ -137,7 +177,7 @@ class AudioHandler(TagMutations, BaseMetadataHandler):
         except Exception as e:
             errors.append(f"Audio read error: {e}")
             writable = False
-        record = self._make_record(path, read_errors=errors,
+        record = self._make_record(path, read_errors=errors, warnings=notes,
                                    supports_write=writable and not errors,
                                    supports_delete=writable and not errors)
         if errors:

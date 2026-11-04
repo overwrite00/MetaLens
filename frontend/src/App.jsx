@@ -8,7 +8,7 @@ import { useUndoStack } from './hooks/useUndoStack'
 import { useUpdates } from './hooks/useUpdates'
 import { metalens } from './api/client'
 import { isTextEditable, isUndoShortcut } from './lib/keyboard'
-import { FolderOpen, RotateCcw, GitCompare, Layers, CircleArrowUp } from 'lucide-react'
+import { FolderOpen, RotateCcw, GitCompare, Layers, CircleArrowUp, LogOut } from 'lucide-react'
 import './styles/globals.css'
 
 const baseName = path => (path ? String(path).split(/[\\/]/).pop() : 'the file')
@@ -18,6 +18,7 @@ export default function App() {
   const [selectedFile, setSelectedFile] = useState(null)
   const [fileB, setFileB]               = useState(null)
   const [showAbout, setShowAbout]       = useState(false)
+  const [exiting, setExiting]           = useState(false)
   const [undoMsg, setUndoMsg]           = useState(null)
   const { push: undoPush, undo, canUndo, runExclusive, busy } = useUndoStack()
   const updates = useUpdates()
@@ -84,6 +85,13 @@ export default function App() {
     if (!window.electronAPI) return
     const path = await window.electronAPI.openFolderDialog()
     if (path) handleSelectPath(path)
+  }
+
+  // Exit: the main process stops the sidecar (its whole process tree) and quits the app
+  async function exitApp() {
+    if (busy || exiting) return
+    setExiting(true)
+    try { await window.electronAPI.quitApp() } catch { setExiting(false) }
   }
 
   // ── Undo ──────────────────────────────────────────────────────────────────
@@ -194,6 +202,12 @@ export default function App() {
             </Button>
           )}
           <Button variant="ghost" size="xs" onClick={() => setShowAbout(true)}>About</Button>
+          {window.electronAPI?.quitApp && (
+            <Button variant="ghost" size="xs" onClick={exitApp} disabled={busy || exiting}
+              title={busy ? 'Wait for the save in progress to finish' : 'Exit MetaLens and stop its background process'}>
+              <LogOut size={12} /> Exit
+            </Button>
+          )}
         </div>
       </div>
 
@@ -215,6 +229,9 @@ export default function App() {
             reloadKey={filesReloadKey}
             onSelectFile={handleSelectFile}
             onSelectTwo={handleSelectTwo}
+            onUndoPush={undoPush}
+            runExclusive={runExclusive}
+            onChanged={() => setFilesReloadKey(value => value + 1)}
           />
         </div>
 

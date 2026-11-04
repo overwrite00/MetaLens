@@ -9,9 +9,105 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ### Roadmap
 
-- [ ] **CSV/JSON Export** — Export metadata for the current file or folder
 - [ ] **Batch Edit** — Apply a field change to multiple selected files at once
 - [ ] **Search/Filter Bar** — Filter the file list by name or extension
+
+---
+
+## [0.5.0] — 2026-11-04
+
+### Added
+- **Exit button.** An **Exit** button at the right of the toolbar closes MetaLens: it stops the background
+  process that reads and writes the metadata (with everything it started), cancels a download in progress and
+  releases its memory and port. It waits while a save is in progress. (**File → Quit** does the same.)
+- **Add a position.** The Batch dialog puts a latitude and longitude on the selected pictures, or looks up the
+  position of each picture by its capture time along a GPX track (with a camera-clock offset and a maximum gap);
+  pictures of formats that cannot hold a position are reported. GPS entries can now also be added by hand.
+- **Legacy Office (DOC, XLS, PPT):** the document properties (author, company, manager, custom ones...) can be
+  removed in place, without changing the size of the file; Undo restores it exactly.
+- **Canon CR3 and Fujifilm RAF** raw files: EXIF, GPS and the preview picture metadata are read.
+- **PDF:** the XMP metadata stream is now shown and can be removed as a whole (its edit history and identifiers
+  were previously kept); **TIFF:** the IPTC record can be removed as a whole.
+- **Other languages of XMP texts** (title, description...) are listed next to the main text (`xmp:dc:title@de`),
+  read only. **Camera maker data:** the serial number, owner name, lens and similar values stored in Canon, Nikon
+  and Sony camera notes are shown (`maker:*`, read only) and counted as device or identity data when preparing a
+  file for sharing; removing the camera note removes them.
+- **Search by common names.** The names used by the search box are also served by the sidecar (`GET /aliases`).
+- **Canon CR3 and Fujifilm RAF** files now say why they are read only.
+- **Operations on several files.** A *Batch* button in the file list works on the selected files: prepare them
+  for sharing, shift their dates (minutes, hours or days, forwards or backwards), copy the metadata of the first
+  file to the others, rename from metadata (template such as `{exif:DateTimeOriginal|%Y%m%d}_{name}`) and, for the
+  folder, export the metadata of every file to CSV or JSON. Each action shows a preview first; every file is saved
+  and can be undone on its own.
+- **Prepare for sharing.** A new *Share* tab removes what a file reveals before it is sent to someone: choose a
+  preset (location, personal data, everything shown) or individual categories, see exactly which fields will
+  be removed and which cannot be, then apply it in one step that can be undone (`POST /sanitize`).
+- **Editing and adding metadata in TIFF, DNG and RAW (TIFF-based), HEIC/HEIF/AVIF and MP4/MOV files.**
+  EXIF entries and XMP properties can be changed or added (a longer value is stored at the end of the file and
+  the entry points to it; nothing that exists is moved, the picture data is verified unchanged and every change
+  can be undone). In videos the creation/modification dates, location, device, software and text entries can be
+  changed or created, and XMP can be edited or created; a longer value is stored by growing the movie atom
+  (the media data and its offsets are kept consistent). RAW support is experimental.
+- **PNG and WebP can now be edited:** EXIF and XMP fields are written (WebP files gain the extended header
+  they need), PNG text chunks can be removed, the picture data is verified unchanged on every save (and the
+  save is refused otherwise) and every change can be undone.
+- **Office documents (DOCX, XLSX, PPTX): application and custom properties** (company, manager, template,
+  custom fields...) can now be removed, one by one or with *Prepare for sharing*, and the change can be undone.
+- **OpenDocument and EPUB files can be edited:** texts, dates and custom fields can be rewritten or added, any
+  field can be removed (an EPUB keeps its identifier, title and language) and the change can be undone; the rest
+  of the package is copied unchanged and signed documents stay untouched.
+- **Matroska and WebM (MKV, WEBM, MKA):** the file's own fields are now read (title, muxer and writing
+  application, date, tags, attachments, tracks) instead of the generic reader, and the title, tags, dates and
+  attachments can be removed or, for texts, rewritten when they fit (also with *Prepare for sharing*). Nothing
+  is moved, the audio and video data is verified unchanged and every change can be undone byte for byte.
+- **HEIC, HEIF and AVIF: removal of metadata.** EXIF, GPS and XMP can be removed in place (also with *Prepare
+  for sharing*); the image items are verified unchanged and the change can be undone byte for byte.
+- **TIFF, DNG and TIFF-based RAW files: removal of metadata.** Camera, owner, software, dates, GPS and the other
+  EXIF entries (and XMP properties) can be removed without moving anything in the file: the removed values are
+  zeroed, the picture data and the maker note stay valid and unchanged (verified on every save), and the change
+  can be undone byte for byte. RAW support is marked experimental. Nothing can be added or edited in these files.
+- **MP4, MOV and M4A: removal of structure and XMP.** Location, device, dates, text atoms and XMP of videos can
+  be removed (also with *Prepare for sharing*). Nothing in the file is moved and the audio/video data is
+  verified unchanged; the change can be undone byte for byte.
+- **XMP data not shown** (edit history, document identifiers, derived-from...) is now listed as one field
+  (`xmp:@hidden`) and is removed together with the other personal data by *Prepare for sharing*.
+- **Privacy indicators.** Every field is classified by what it can reveal when the file is shared (location,
+  identity, device, dates, software, thumbnail, free text). The metadata views show a badge on each sensitive
+  field and a line summarizing what sharing the file would reveal. The API exposes `sensitivity` per field and
+  `sensitivity_summary` per file.
+- **Video and audio structure (MP4, MOV, M4A).** Brand, creation and modification dates, track list (type,
+  language, size, rotation, codec, frame rate, sample rate, channels), QuickTime keys (including the location
+  and device written by phones), text atoms and the XMP packet, all read-only (`qt:` fields).
+- **HEIC, HEIF and AVIF** images: size, rotation, EXIF, GPS, XMP and ICC profile.
+- **PNG:** XMP is now shown as regular `xmp:` fields; image header (bit depth, colour type, interlace), last
+  modification time and ICC profile.
+- **TIFF and DNG:** embedded XMP, IPTC and ICC profile.
+- **JPEG:** JFIF header, comments, Multi-Picture index and ICC profile (read-only).
+- **RAW:** Olympus ORF and Panasonic RW2/RWL files are read, as well as more TIFF-based RAW extensions.
+- **OpenDocument (ODT, ODS, ODP, ODG) and EPUB** metadata (read-only).
+- **PDF:** version and linearization are shown.
+- **Audio:** MPEG layer/version/channel mode/bitrate mode/encoder, FLAC stream details, encoder vendor of
+  Vorbis files; pictures and general objects show their type and description.
+- **Files without an extension** are recognized from their content and handled like their format (a JPEG
+  named `photo` can now be read and edited like a `.jpg`).
+
+### Security
+- The Batch operations (prepare for sharing, shift dates, copy tags, add a position) no longer return the text of
+  an internal error for a file that failed: each failed file carries its structured `errors` list only (the
+  `detail` field of those results is gone).
+- GitHub Actions: the package smoke-test jobs now run with read-only repository permissions.
+- Development dependency `minimatch` (used by the packaging tools) updated to 11.0.4 where the packager uses it.
+
+### Changed
+- The About window is wider (and shows longer release notes), so it no longer looks narrow and tall when an update is available.
+- Keys: `png:XML:com.adobe.xmp` is replaced by the `xmp:` fields it contains; PNG text in several languages
+  is `png:<keyword>@<language>` instead of `png:<keyword>#2`; files without an extension use their format's
+  keys (e.g. `exif:*`) instead of `hachoir:*`; MKV and WebM files use `mkv:*` keys instead of `hachoir:*`.
+- The temporary copy used while saving now has the same name as the file (inside the private temporary folder).
+- A tag editor that cannot open a movie shows its structure read-only instead of reporting a read error.
+- An Exif 3.0 UTF-8 text tag no longer makes the whole EXIF block non-rewritable.
+- Code quality: circular imports between the image and HEIC handlers removed, unused code and empty error
+  handlers cleaned up, a few tests strengthened (they now compare the restored bytes after Undo).
 
 ---
 

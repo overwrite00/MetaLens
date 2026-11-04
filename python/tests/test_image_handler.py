@@ -97,7 +97,8 @@ def test_tiff_with_dpi_reads_without_errors(tmp_path):
     fields = {f.key: f for f in record.fields}
     assert fields["img:dpi"].value == [300.0, 300.0]
     assert fields["exif:Make"].value == "ScannerCo"
-    assert not record.format_supports_write
+    assert record.format_supports_write and fields["exif:Make"].editable      # TIFF metadata is editable
+    assert not fields["exif:ImageWidth"].editable if "exif:ImageWidth" in fields else True
 
 
 # ──────────────────────── N2: segments preserved byte for byte ───────────────
@@ -399,15 +400,17 @@ def test_png_webp_expose_exif_and_gif_comment(tmp_path):
     png = _fields(_make("png_text_exif", tmp_path))
     assert png["exif:Make"].value == "Canon"
     assert png["png:Title"].value == "PNG title"
-    assert png["png:Description"].value == "Descrizione è 日本"
+    assert png["png:Description@it"].value == "Descrizione è 日本"
     assert png["png:Comment"].value.startswith("compressed comment")
     webp = _fields(_make("webp_exif", tmp_path))
     assert webp["exif:Model"].value == "EOS Test"
     assert webp["xmp:dc:subject"].value == ["alpha", "beta ß"]
     gif = _fields(_make("gif_comment", tmp_path))
     assert gif["gif:comment"].value == "GIF comment è"
-    for fields in (png, webp, gif):
-        assert all(not f.editable and not f.deletable for f in fields.values())
+    assert all(not f.editable and not f.deletable for f in gif.values())
+    # PNG and WebP metadata is editable since 0.5.0: the EXIF and XMP blocks, and PNG text can be removed.
+    assert png["exif:Make"].editable and png["png:Title"].deletable and not png["png:Title"].editable
+    assert webp["exif:Model"].editable and webp["xmp:dc:subject"].editable
 
 
 # ──────────────────────── XMP ────────────────────────────────────────────────

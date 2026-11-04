@@ -1,6 +1,6 @@
 {
   "name": "metalens",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Universal File Metadata Manager",
   "author": "Graziano Mariella",
   "license": "MIT",
@@ -17,5 +17,10 @@
     "@electron-forge/maker-squirrel": "^8.0.1",
     "@electron-forge/maker-zip": "^8.0.1",
     "electron": "^45.1.0"
+  },
+  "overrides": {
+    "@electron/asar@4": {
+      "minimatch": "^11.0.4"
+    }
   }
 }

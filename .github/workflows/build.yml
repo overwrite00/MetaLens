@@ -419,6 +419,8 @@ jobs:
   smoke-linux-beta:
     if: github.ref == 'refs/heads/develop'
     needs: [get-version-beta, build-linux-beta, build-rpm-beta]
+    permissions:
+      contents: read
     uses: ./.github/workflows/smoke-packages.yml
     with:
       expected_version: ${{ needs.get-version-beta.outputs.base_version }}
@@ -810,6 +812,8 @@ jobs:
   smoke-linux-stable:
     if: github.ref == 'refs/heads/main'
     needs: [get-version, build-linux-stable, build-rpm-stable]
+    permissions:
+      contents: read
     uses: ./.github/workflows/smoke-packages.yml
     with:
       expected_version: ${{ needs.get-version.outputs.version }}

@@ -1,0 +1,54 @@
+// Other names under which a field is commonly known: used to find it in the search box of the metadata
+// table. The keys themselves never change.
+export const ALIASES = {
+  'exif:DateTime': ['modify date', 'modified', 'date modified'],
+  'exif:DateTimeOriginal': ['date taken', 'capture date', 'shot date', 'create date'],
+  'exif:DateTimeDigitized': ['create date', 'digitized'],
+  'exif:ISOSpeedRatings': ['iso'],
+  'exif:ExposureBiasValue': ['exposure compensation'],
+  'exif:PixelXDimension': ['exif image width', 'width'],
+  'exif:PixelYDimension': ['exif image height', 'height'],
+  'exif:FNumber': ['aperture', 'f-number'],
+  'exif:ExposureTime': ['shutter speed'],
+  'exif:Make': ['camera maker', 'manufacturer'],
+  'exif:Model': ['camera model'],
+  'exif:Artist': ['author', 'photographer', 'creator'],
+  'exif:Copyright': ['rights'],
+  'exif:Software': ['program', 'application'],
+  'exif:ImageDescription': ['caption', 'description'],
+  'gps:Latitude': ['gps latitude', 'position', 'location'],
+  'gps:Longitude': ['gps longitude', 'position', 'location'],
+  'gps:Altitude': ['gps altitude', 'elevation'],
+  'xmp:dc:creator': ['author', 'artist'],
+  'xmp:dc:title': ['title'],
+  'xmp:dc:subject': ['keywords', 'tags'],
+  'xmp:dc:description': ['caption', 'description'],
+  'xmp:xmp:CreateDate': ['date created', 'create date'],
+  'xmp:xmp:CreatorTool': ['software', 'program'],
+  'iptc:By-line': ['author', 'creator', 'photographer'],
+  'iptc:Keywords': ['tags'],
+  'iptc:Caption-Abstract': ['caption', 'description'],
+  'tag:TIT2': ['title', 'song'],
+  'tag:TPE1': ['artist', 'performer'],
+  'tag:TALB': ['album'],
+  'tag:TDRC': ['year', 'recording date'],
+  'mp4:©nam': ['title'],
+  'mp4:©ART': ['artist'],
+  'pdf:Author': ['creator', 'owner'],
+  'pdf:CreationDate': ['create date', 'created'],
+  'pdf:ModDate': ['modify date', 'modified'],
+  'pdf:Producer': ['software', 'pdf producer'],
+  'office:author': ['creator', 'owner'],
+  'office:last_modified_by': ['editor', 'modified by'],
+  'office:created': ['create date', 'date created'],
+  'qt:CreateDate': ['create date', 'creation date', 'date taken'],
+  'qt:mdta:com.apple.quicktime.location.ISO6709': ['gps', 'position', 'location'],
+}
+
+/** Whether `field` matches the lowercase `query` by key, label, value or one of its other names. */
+export function matchesQuery(field, query) {
+  if (!query) return true
+  const haystack = [field.key, field.label, ...(ALIASES[field.key] ?? []),
+    ...(Array.isArray(field.value) ? field.value : [field.value]).filter(v => typeof v === 'string' || typeof v === 'number')]
+  return haystack.some(text => String(text ?? '').toLowerCase().includes(query))
+}

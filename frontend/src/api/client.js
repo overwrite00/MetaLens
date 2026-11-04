@@ -91,6 +91,14 @@ async function api(method, path, body = null) {
 // The server reads only key and value: permission/type flags are never sent.
 const writeFields = fields => (fields ?? []).map(({ key, value }) => ({ key, value }))
 
+/** A response body as text (for downloads such as the CSV export). */
+async function apiText(path) {
+  const { port, token } = await getConnection()
+  const res = await fetch(`http://127.0.0.1:${port}${path}`, { headers: { Authorization: `Bearer ${token}` } })
+  if (!res.ok) throw apiError(res.status, res.statusText, await readJson(res).catch(() => null))
+  return res.text()
+}
+
 export const metalens = {
   health:    ()                    => api('GET',  '/health'),
   list:      (path)                => api('GET',  `/list?path=${encodeURIComponent(path)}`),
@@ -105,6 +113,20 @@ export const metalens = {
   // Rejects with status 410 `undo_expired` or 409 `concurrent_modification` when the
   // entry can no longer be applied; other errors (403/422/500/network) are retryable.
   undo:      (token)               => api('POST', '/undo', { token }),
+  // Prepare for sharing: remove what the categories reveal. With `preview` nothing is changed.
+  sanitize:  (path, categories, { preview = true, keep = [] } = {}) =>
+    api('POST', '/sanitize', { path, categories: [...categories], preview, keep: [...keep] }),
+  // Several files at once: one verified save and one undo token per file (not atomic across files).
+  sanitizeMany: (paths, categories, { preview = true, keep = [] } = {}) =>
+    api('POST', '/sanitize-many', { paths: [...paths], categories: [...categories], preview, keep: [...keep] }),
+  shiftDates:   (paths, seconds, { preview = true, keys = null } = {}) =>
+    api('POST', '/shift-dates', { paths: [...paths], seconds, preview, ...(keys ? { keys: [...keys] } : {}) }),
+  copyTags:     (source, targets, { preview = true, keys = null } = {}) =>
+    api('POST', '/copy-tags', { source, targets: [...targets], preview, ...(keys ? { keys: [...keys] } : {}) }),
+  geotag:       (paths, position, { preview = true } = {}) => api('POST', '/geotag', { paths: [...paths], preview, ...position }),
+  rename:       (path, template, { preview = true } = {}) => api('POST', '/rename', { path, template, preview }),
+  exportFolder: (path, format = 'csv', recursive = false) =>
+    apiText(`/export?path=${encodeURIComponent(path)}&format=${format}&recursive=${recursive}`),
   diff:      (a, b)                => api('GET',  `/diff?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`),
   hash:      (path, algorithms)    => api('GET',  `/hash?path=${encodeURIComponent(path)}&algorithms=${encodeURIComponent(algorithms)}`),
 }

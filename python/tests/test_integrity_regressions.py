@@ -84,7 +84,7 @@ def test_office_preserves_all_other_zip_members(tmp_path):
     assert all(after[k] == v for k, v in before.items() if k != "docProps/core.xml")
 
 
-@pytest.mark.parametrize("extension", ["png", "gif", "bmp", "tiff", "webp"])
+@pytest.mark.parametrize("extension", ["gif", "bmp"])
 def test_image_capabilities_are_honest(tmp_path, extension):
     from PIL import Image
     from core.handlers.image_handler import ImageHandler

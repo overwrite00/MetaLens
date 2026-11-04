@@ -115,7 +115,7 @@ def test_offsetless_date_in_file_is_read_only(tmp_path):
 
 # ──────────────────────── app.xml / custom.xml (D16) ─────────────────────────
 
-def test_app_and_custom_properties_read_only(tmp_path):
+def test_app_and_custom_properties_are_read_only_values_that_can_be_removed(tmp_path):
     path = factory.docx_app_custom(tmp_path)
     f = _fields(path)
     expected = {
@@ -129,21 +129,21 @@ def test_app_and_custom_properties_read_only(tmp_path):
     }
     for key, (ftype, value) in expected.items():
         assert (f[key].field_type, f[key].value) == (ftype, value), key
-        assert not f[key].editable and not f[key].deletable, key
+        assert not f[key].editable and f[key].deletable, key        # never edited, but removable
     assert f["office:app.TitlesOfParts"].multi
     assert "office:app.HeadingPairs" not in f
 
 
 @pytest.mark.asyncio
-async def test_api_rejects_app_custom_mutation(client, tmp_path):
+async def test_api_rejects_app_custom_edits_and_unknown_removals(client, tmp_path):
     path = factory.docx_app_custom(tmp_path)
     before = path.read_bytes()
     for key in ("office:app.Company", "office:custom.Project"):
         resp = await client.post("/write", json={"path": str(path), "fields": [{"key": key, "value": "x"}]})
-        assert resp.status_code == 422
-        resp = await client.post("/delete", json={"path": str(path), "keys": [key]})
-        assert resp.status_code == 422
+        assert resp.status_code == 422                    # values are never edited
     assert path.read_bytes() == before
+    resp = await client.post("/delete", json={"path": str(path), "keys": ["office:app.NoSuchProperty"]})
+    assert resp.status_code == 422 and path.read_bytes() == before
 
 
 def test_core_edit_keeps_app_and_custom_parts(tmp_path):

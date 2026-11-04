@@ -1,16 +1,22 @@
 import { Badge } from './ui/Badge'
+import { PrivacySummary, SensitivityBadge } from './PrivacyIndicators'
+import { matchesQuery } from '../lib/aliases'
+import { useState } from 'react'
 import { formatItems, isBinaryDescriptor, uniqueKeys, valueTitle } from '../lib/formatValue'
 
 const SOURCE_VARIANTS = {
-  exif: 'cyan', gps: 'cyan', iptc: 'cyan', xmp: 'cyan', png: 'cyan', gif: 'cyan',
+  exif: 'cyan', gps: 'cyan', iptc: 'cyan', xmp: 'cyan', png: 'cyan', gif: 'cyan', pngchunk: 'cyan',
   id3: 'purple', vorbis: 'purple', mp4: 'purple', asf: 'purple', ape: 'purple', audio: 'purple', flac: 'purple',
   pdf: 'warning', office: 'warning', ole: 'warning',
   filesystem: 'default', xattr: 'default',
-  hachoir: 'default', video: 'purple', image: 'cyan',
+  hachoir: 'default', video: 'purple', image: 'cyan', qt: 'purple', mkv: 'purple', odf: 'warning', epub: 'warning', heif: 'cyan', icc: 'cyan', maker: 'cyan', jfif: 'cyan', jpeg: 'cyan', mpf: 'cyan',
 }
 
-export function MetadataTable({ fields = [] }) {
-  if (!fields.length) {
+export function MetadataTable({ fields: allFields = [] }) {
+  const [query, setQuery] = useState('')
+  const needle = query.trim().toLowerCase()
+  const fields = allFields.filter(f => matchesQuery(f, needle))
+  if (!allFields.length) {
     return (
       <div className="flex items-center justify-center h-24 text-cyber-dim text-xs">
         No metadata fields
@@ -28,6 +34,13 @@ export function MetadataTable({ fields = [] }) {
 
   return (
     <div className="overflow-y-auto h-full">
+      <PrivacySummary fields={allFields} />
+      <div className="px-3 py-1 border-b border-cyber-border">
+        <input type="search" aria-label="Search fields" placeholder="Search by name, other name or value…" value={query}
+          onChange={e => setQuery(e.target.value)}
+          className="w-full bg-cyber-bg border border-cyber-border rounded px-2 py-0.5 text-[11px] font-mono" />
+      </div>
+      {!fields.length && <div className="p-4 text-center text-cyber-dim text-xs">No field matches</div>}
       {Object.entries(groups).map(([src, groupFields]) => {
         const keys = uniqueKeys(groupFields, f => f.key)
         return (
@@ -44,7 +57,7 @@ export function MetadataTable({ fields = [] }) {
                   {f.label || f.key}
                 </div>
                 <div className="flex-1 min-w-0 font-mono text-[11px] text-cyber-text break-all leading-relaxed">
-                  <FieldValue field={f} />
+                  <FieldValue field={f} /><SensitivityBadge field={f} />
                 </div>
                 <div className="ml-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                   {!f.editable && <Badge variant="default">ro</Badge>}

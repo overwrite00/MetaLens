@@ -78,6 +78,11 @@ class BaseMetadataHandler(ABC):
     def can_handle(self, path: Path) -> bool:
         return path.suffix.lower() in self.EXTENSIONS
 
+    def content_digest(self, path: Path) -> str | None:
+        """Digest of the media data of ``path`` (the picture, the audio, the video), ``None`` when
+        the handler cannot tell. A metadata write must never change it: the save is refused otherwise (G5)."""
+        return None
+
     def writable_field(self, path: Path, key: str) -> MetadataField | None:
         """Server-owned schema for known writable fields absent from a file."""
         return None

@@ -82,7 +82,7 @@ def test_integers_are_typed(doc_cp1252):
 def test_thumbnail_is_a_binary_descriptor(doc_cp1252):
     _, f = _read(doc_cp1252)
     thumb = f["ole:thumbnail"]
-    assert thumb.field_type == "binary" and not thumb.editable and not thumb.deletable
+    assert thumb.field_type == "binary" and not thumb.editable and thumb.deletable
     assert thumb.value == {"size": len(factory.THUMBNAIL_CF),
                            "sha256": hashlib.sha256(factory.THUMBNAIL_CF).hexdigest(),
                            "mime": "image/bmp"}
@@ -118,11 +118,11 @@ def test_user_defined_properties(doc_cp1252):
 
 def test_everything_is_read_only_unique_and_json(doc_cp1252):
     record, f = _read(doc_cp1252)
-    assert not record.supports_write and not record.supports_delete
-    assert not record.format_supports_write and not record.format_supports_delete
+    assert not record.supports_write and not record.format_supports_write      # values are never edited
+    assert record.supports_delete and record.format_supports_delete            # but they can be removed
     keys = [x.key for x in record.fields]
     assert len(keys) == len(set(keys))
-    assert all(not x.editable and not x.deletable and x.source == "ole" for x in record.fields)
+    assert all(not x.editable and x.deletable and x.source == "ole" for x in record.fields)
     body = json.dumps(record.to_dict(), allow_nan=False, ensure_ascii=False)
     assert "�" not in body
 
@@ -179,8 +179,8 @@ def test_not_an_ole_file(tmp_path):
     assert record.read_errors == ["Not a valid OLE file"]
 
 
-def test_write_and_delete_are_not_supported(doc_cp1252):
+def test_values_are_not_edited_but_can_be_removed(doc_cp1252):
     with pytest.raises(NotImplementedError):
         OleHandler().write(doc_cp1252, [])
-    with pytest.raises(NotImplementedError):
-        OleHandler().delete(doc_cp1252, ["ole:title"])
+    OleHandler().delete(doc_cp1252, ["ole:title"])
+    assert "ole:title" not in {f.key for f in OleHandler().read(doc_cp1252).fields}

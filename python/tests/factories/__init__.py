@@ -40,7 +40,7 @@ Builder = Callable[[Path], Path]
 
 # Fixed order = order of the contract test ids. Add a module here only together
 # with the new file; never reorder.
-MODULE_NAMES: tuple[str, ...] = ("image", "audio", "mp4", "pdf", "office", "ole", "hachoir", "fs")
+MODULE_NAMES: tuple[str, ...] = ("image", "audio", "mp4", "pdf", "office", "ole", "hachoir", "fs", "heif", "packages", "mkv")
 
 
 @dataclass(frozen=True, eq=False)

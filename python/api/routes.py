@@ -89,7 +89,7 @@ from core.errors import (ConcurrentModificationError, ErrorCode, MetadataValueEr
                          MetadataValueErrors, TargetNotWritableError, describe_error, error_entry)
 from core.handlers.filesystem_handler import MTIME_KEY, FilesystemHandler, write_block_reason
 from core.models import MetadataField, MetadataRecord
-from core import path_security
+from core import path_security, sensitivity
 from core.path_security import (validate_file_path, validate_directory_path,
                                 secure_atomic_write, FileBusyError, NothingToCommit, PathSecurityError,
                                 is_active_transaction_dir, raise_if_unreadable, winerror_of)
@@ -268,6 +268,13 @@ def _transaction_error(exc: BaseException) -> ApiError:
 @router.get("/health")
 def health():
     return {"status": "ok", "version": settings.version, "app": settings.app_name}
+
+
+@router.get("/aliases")
+def aliases():
+    """Other names of common fields, for searching by what a person would type."""
+    from core.aliases import ALIASES
+    return {"aliases": ALIASES}
 
 
 # ──────────────────────────────── /hash ──────────────────────────────────────
@@ -988,6 +995,17 @@ def _mutate(ctx: _Context, plan: _Plan) -> _Outcome:
     return _mutate_once(ctx, plan)
 
 
+def _media_digest(ctx: _Context, path: Path) -> str | None:
+    """G5: digest of the media data as the format handler defines it (``None`` = not checked)."""
+    if ctx.fs_primary:
+        return None
+    try:
+        return ctx.handler.content_digest(path)
+    except Exception:
+        logger.warning("Media digest of %s failed", path, exc_info=True)
+        return None
+
+
 def _mutate_once(ctx: _Context, plan: _Plan) -> _Outcome:
     """ONE transaction: hooks on the temporary copy, verification, replace.
 
@@ -1003,6 +1021,7 @@ def _mutate_once(ctx: _Context, plan: _Plan) -> _Outcome:
 
     def mutate(tmp: Path) -> None:
         before = {lay: _layer_values(ctx, tmp, lay)[0] for lay in layers}
+        media_before = _media_digest(ctx, tmp) if FORMAT in layers else None
         try:
             outcome.pre = {lay: _snapshot(ctx.handler_of(lay), tmp, plan.keys(lay)) for lay in layers}
         except Exception as exc:
@@ -1018,6 +1037,9 @@ def _mutate_once(ctx: _Context, plan: _Plan) -> _Outcome:
                 _call_hook(handler, "apply_write", tmp, plan.writes[lay], [f.key for f in plan.writes[lay]])
         problems: list[MetadataValueError] = []
         changed = False
+        if media_before is not None and _media_digest(ctx, tmp) != media_before:
+            problems.append(MetadataValueError(None, ErrorCode.LOSSY_WRITE,
+                                               "the save would have changed the media data of the file"))
         for lay in layers:
             after, after_errors = _layer_values(ctx, tmp, lay)
             written, deleted = {f.key for f in plan.writes[lay]}, set(plan.deletes[lay])
@@ -1146,6 +1168,65 @@ def write_metadata(req: WriteRequest):
 @router.post("/delete")
 def delete_metadata(req: DeleteRequest):
     return _save(req.path, [], req.keys)
+
+
+# ──────────────────────────────── /sanitize ──────────────────────────────────
+
+class SanitizeRequest(BaseModel):
+    """Prepare a file for sharing: remove what the chosen categories reveal."""
+    path: str
+    categories: list[str] = Field(min_length=1)
+    preview: bool = True                                  # only report what would be removed
+    keep: list[str] = Field(default_factory=list)         # keys the user wants to keep anyway
+
+
+def _sanitize_entry(f: MetadataField) -> dict:
+    return {"key": f.key, "label": f.label, "category": sensitivity.classify(f.key)}
+
+
+def _sanitize_scan(ctx: _Context, categories: set[str], keep: set[str]) -> tuple[list[MetadataField], list[dict]]:
+    """Fields that can be removed and those of the categories that cannot (with the reason)."""
+    removable: list[MetadataField] = []
+    remaining: list[dict] = []
+    reason = ctx.record.read_only_reason
+    for f in ctx.record.fields:
+        if sensitivity.classify(f.key) not in categories or f.key in keep:
+            continue
+        if f.deletable and not ctx.not_writable:
+            removable.append(f)
+        else:
+            why = ctx.not_writable or (reason if not _is_filesystem_key(f.key) else None) \
+                or "This field cannot be removed from this kind of file"
+            remaining.append({**_sanitize_entry(f), "reason": why})
+    return removable, remaining
+
+
+@router.post("/sanitize")
+def sanitize_metadata(req: SanitizeRequest):
+    unknown = [c for c in req.categories if c not in sensitivity.CATEGORIES]
+    if unknown:
+        raise ApiError.one(422, ApiCode.INVALID_REQUEST, f"unknown categories: {', '.join(unknown)}")
+    categories, keep = set(req.categories), set(req.keep)
+    path = _valid_file(req.path)
+    with PATH_LOCKS.reading(path):
+        ctx = stable_read(path, lambda: _read_full_record(path))
+    removable, remaining = _sanitize_scan(ctx, categories, keep)
+    body: dict = {"ok": True, "preview": req.preview, "will_remove": [_sanitize_entry(f) for f in removable],
+                  "remaining": remaining, "undo_token": None, "undo_unavailable": None, "warnings": []}
+    if req.preview or not removable:
+        return body
+    saved = _save(req.path, [], [f.key for f in removable])
+    # Check the result: what the chosen categories still reveal after the save.
+    with PATH_LOCKS.reading(path):
+        after = stable_read(path, lambda: _read_full_record(path))
+    left_removable, left = _sanitize_scan(after, categories, keep)
+    body.update(undo_token=saved["undo_token"], undo_unavailable=saved["undo_unavailable"],
+                warnings=saved["warnings"], remaining=left,
+                removed=[_sanitize_entry(f) for f in removable if f.key not in {g.key for g in left_removable}])
+    if left_removable:
+        body["warnings"] = [*body["warnings"],
+                            "Some fields could not be removed: " + ", ".join(f.key for f in left_removable)]
+    return body
 
 
 # ──────────────────────────────── /undo ──────────────────────────────────────

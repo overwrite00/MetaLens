@@ -14,6 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from config import settings
+from api.geotag import router as geotag_router
+from api.operations import router as operations_router
 from api.routes import ApiCode, error_response, install_error_handlers, router
 from core.errors import error_entry
 
@@ -59,6 +61,8 @@ def _auth_error(status: int, code: str, message: str) -> JSONResponse:
 
 install_error_handlers(app)
 app.include_router(router)
+app.include_router(operations_router)
+app.include_router(geotag_router)
 
 
 if __name__ == "__main__":

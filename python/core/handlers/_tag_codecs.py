@@ -498,6 +498,11 @@ class Id3Codec(TagCodec):
                 out.append(_text_field(key, label, urls, self.SOURCE,
                                        multi=isinstance(frame, id3.UrlFrameU)))
             elif fid in ("APIC", "GEOB"):
+                if fid == "APIC":
+                    kind = getattr(frame.type, "name", str(frame.type)).replace("_", " ").capitalize()
+                    label = f"{label} - {kind}" + (f" ({frame.desc})" if frame.desc else "")
+                elif frame.filename:
+                    label = f"{label} - {frame.filename}"
                 out.append(MetadataField.binary_field(key, label, frame.data, mime=frame.mime or None,
                                                       source=self.SOURCE, raw_value=frame.data))
             elif fid == "UFID":

@@ -14,10 +14,12 @@ Learn how to browse files, inspect and edit metadata, compute hashes, and compar
 3. [📄 Select a File](#-select-a-file)
 4. [👁️ View Metadata](#-view-metadata)
 5. [✏️ Edit Metadata](#-edit-metadata)
-6. [🗑️ Delete Metadata Fields](#-delete-metadata-fields)
-7. [🔑 Compute File Hashes](#-compute-file-hashes)
-8. [⚖️ Compare Two Files (Diff)](#-compare-two-files-diff)
-9. [↩️ Undo](#-undo)
+6. [🛡️ Prepare a File for Sharing](#-prepare-a-file-for-sharing)
+7. [🗑️ Delete Metadata Fields](#-delete-metadata-fields)
+8. [🔑 Compute File Hashes](#-compute-file-hashes)
+9. [⚖️ Compare Two Files (Diff)](#-compare-two-files-diff)
+10. [↩️ Undo](#-undo)
+11. [🚪 Exit MetaLens](#-exit-metalens)
 
 ---
 
@@ -47,6 +49,7 @@ The **center panel** (`FilePanel`) shows every file in the currently selected fo
 The **detail panel** (`DetailPanel`) opens on the **Metadata** tab by default, showing a read-only table (`MetadataTable`) of every field MetaLens extracted, grouped by source (`exif`, `gps`, `xmp`, `iptc`, `id3`, `vorbis`, `mp4`, `pdf`, `office`, `hachoir`, `filesystem`, …).
 
 - Multi-valued fields (artists, keywords, …) are shown as lists, never joined into one string.
+- A line above the table tells what sharing the file would reveal (location, identity, device, dates...), and each sensitive field carries a badge with its category.
 - Binary values (cover art, pictures, MakerNote, thumbnails) are shown as size, MIME type and SHA-256, not as their bytes.
 - Notices above the table explain why the format metadata is read-only (e.g. signed PDF, AAC, legacy Office), report read errors and show warnings (e.g. an EXIF MakerNote that is moved on rewrite, duplicated metadata segments).
 
@@ -60,6 +63,18 @@ Switch to the **Edit** tab to open `MetadataEditor`:
 - **Add field** offers the fields the format can store but the file does not have yet (e.g. an ID3 title on an untagged WAV, an XMP keyword list on a JPEG)
 - **Save** sends all edits, additions and deletions as **one** save. The sidecar validates every value first (invalid values are reported next to their field and nothing is written), applies the changes to a private copy next to the file, reads the copy back to check that exactly the requested changes were stored, and only then replaces the original (`ReplaceFileW` on Windows, keeping the security descriptor, alternate data streams and attributes such as *hidden*; `os.replace` elsewhere). A failure at any step leaves the original untouched. The file is replaced by a new one, so hard links to it are detached
 - When the format metadata is read-only (e.g. RAW, TIFF/PNG/WebP/GIF, AAC, MKV/AVI, legacy `.doc`/`.xls`/`.ppt`, encrypted or digitally signed PDFs, signed Office packages), the Edit tab shows a **read-only** notice with the reason; filesystem fields such as the modification time (`fs:mtime`) stay editable
+
+---
+
+## 🛡️ Prepare a File for Sharing
+
+The **Share** tab removes what a file reveals before you send it to someone.
+
+1. Choose a preset (*Remove location*, *Remove personal data*, *Remove everything shown*) or tick the categories: location, identity, device, thumbnail, history (edit history and other data that is stored but not shown), free text, dates, software.
+2. The preview lists the fields that will be removed and those that cannot be removed from this kind of file, with the reason.
+3. *Remove* saves once; the change can be undone.
+
+The **Batch** button of the file list (select files with Ctrl/Shift) applies the same to many files and also: shifts dates, copies metadata of the first selected file to the others, adds a position (latitude and longitude, or the position along a GPX track by capture time), renames from metadata and exports the metadata of the folder to CSV or JSON. Every action previews first and every file is saved and undone on its own. The search box above the metadata table finds fields by name, another common name or value.
 
 ---
 
@@ -107,6 +122,12 @@ MetaLens keeps an undo stack of your last **50** saves for the current session. 
 
 ---
 
+## 🚪 Exit MetaLens
+
+Click **Exit** at the right of the toolbar (or **File → Quit**, or close the window). MetaLens stops its background metadata process together with everything that process started, cancels any update download in progress and then closes, so no process or network port is left behind and the memory is released. The **Exit** button is disabled while a save is in progress. The undo stack is not kept: after you exit, saves can no longer be undone.
+
+---
+
 ## ℹ️ Checking Your Version
 
 Open **Help → About** to see the running app version (the packaged Electron app version, including any `-beta.N` suffix) — useful when reporting a bug. The dialog also links to the project repository on GitHub.
@@ -129,5 +150,5 @@ The preferences (auto-check on/off, ignored version) are stored in `settings.jso
 
 ---
 
-*Last updated: 2026-11-02*
+*Last updated: 2026-11-04*
 *← [Installation](./INSTALLATION.md) | [API Reference →](./API.md)*
