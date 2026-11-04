@@ -11,6 +11,8 @@ MetaLens is designed with security-first principles:
 - **Atomic, verified writes** — every save (edits and deletions together) is prepared on a copy in a private temporary directory beside the target, read back and checked against the request, and checked for concurrent modification before the copy replaces the original (`ReplaceFileW` on Windows, preserving the security descriptor, alternate data streams and file attributes such as *hidden*; `os.replace` elsewhere). Any failure leaves the original content intact. The replacement is a new file, so hard links to the original are detached. A read-only file is refused (HTTP 403), not modified
 - **Path validation** — a dedicated `core.path_security` module normalizes every path (resolves `~`, `..` and symbolic links) and checks that it is an existing, readable regular file or directory before any filesystem access, across all API routes. This is normalization, not a sandbox: an authenticated caller may name any file the user account can access, which is why every request must carry the session token
 - **Hardened update check** — requests are made by the Electron main process, never by the renderer (whose CSP still only allows the local sidecar). It queries the GitHub Releases API of `overwrite00/MetaLens` only, and the renderer cannot supply URLs. Release and asset URLs must point to that repository, and the installer is downloaded only when you click *Download & install* (Windows installed builds), checked against its size and the SHA-256 digest published by GitHub, and discarded on any mismatch. Release notes are shown as plain text
+- **No internal details in errors** — API error bodies carry fixed, structured messages only; the text of internal exceptions stays in the local log
+- **Clean shutdown** — the *Exit* button (and closing the app) stops the sidecar's whole process tree, cancels any update download and releases the port and memory
 - **Transparent code** — all handler and analysis logic is open-source and auditable
 
 ---
@@ -39,7 +41,7 @@ MetaLens is designed with security-first principles:
 ### Metadata Handlers
 
 - Uses established libraries per format: Pillow (image properties), piexif tag tables plus MetaLens's own structure-preserving EXIF/XMP/IPTC codecs and JPEG segment writer (images), mutagen (audio/MP4), pypdf (PDF), Python's `zipfile`/`xml.etree` (Office Open XML packages), olefile (legacy Office), hachoir (read-only fallback for other formats). XMP packets (JPEG, PDF) containing DOCTYPE or entity declarations are refused
-- Field capabilities are enforced by the API; client-provided editability flags cannot override them. Writable: JPEG EXIF/XMP/IPTC, audio tags (except AAC), MP4/MOV atoms, PDF document info, Office core properties, `fs:mtime` and Linux `user.` extended attributes. Read-only: other image formats and RAW, AAC, MKV/AVI and other non-MP4 video, encrypted or digitally signed PDFs, digitally signed Office packages (so a signature is never silently invalidated), Office `app.xml`/`custom.xml`, legacy Office, everything read through hachoir
+- Field capabilities are enforced by the API; client-provided editability flags cannot override them. Writable: EXIF/XMP/IPTC of JPEG, PNG, WebP, TIFF, TIFF-based RAW and HEIC/AVIF (what a format cannot hold is refused), audio tags (except AAC), MP4/MOV and MKV/WebM metadata, PDF document info and XMP, Office and OpenDocument/EPUB properties, `fs:mtime` and Linux `user.` extended attributes; legacy Office (DOC/XLS/PPT) allows removing properties only. Read-only: GIF/BMP, Canon CR3 and Fujifilm RAF, AAC, AVI and other video read through hachoir, encrypted or digitally signed PDFs, digitally signed Office packages (so a signature is never silently invalidated), everything read through hachoir. Every write is checked so that the picture, audio or video data comes out identical
 - Every value is validated before the file is touched; library errors caused by a value are reported as validation errors (HTTP 422), never as crashes
 - Filesystem access always goes through `validate_file_path`/`validate_directory_path` before touching disk
 
@@ -108,5 +110,5 @@ We appreciate responsible disclosure and will credit you in the security advisor
 
 ---
 
-*Last updated: 2026-11-02*
+*Last updated: 2026-11-04*
 *← [Contributing](./CONTRIBUTING.md) | [Back to README →](./README.md)*
