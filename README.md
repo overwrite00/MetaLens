@@ -49,17 +49,19 @@ File (image / audio / video / document / anything)
          │
          ▼
 ┌─────────────────────────────────────────────┐
-│  🖼️ Images   → EXIF, XMP, IPTC (JPEG edit)  │
+│  🖼️ Images   → EXIF, XMP, IPTC, ICC, RAW    │
 │  🎵 Audio    → ID3, Vorbis, ASF, APEv2, MP4 │
-│  🎬 Video    → MP4/MOV tags, other: read    │
+│  🎬 Video    → MP4/MOV atoms, MKV/WebM      │
 │  📄 PDF      → document info + XMP          │
-│  📊 Office   → OOXML core/app/custom, OLE   │
+│  📊 Office   → OOXML, OpenDocument, OLE     │
+│  📚 E-books  → EPUB package metadata        │
 │  📁 Any file → size, timestamps, attributes,│
 │               xattr; hachoir fallback       │
 └─────────────────────────────────────────────┘
          │
          ▼
-   👁️ View · ✏️ Edit · 🗑️ Delete · ⚖️ Diff · 🔑 Hash
+   👁️ View · ✏️ Edit · 🗑️ Delete · 🛡️ Share safely
+   ⚖️ Diff · 🔑 Hash · 🗂️ Batch
 ```
 
 ---
@@ -71,10 +73,14 @@ File (image / audio / video / document / anything)
 - ✏️ **Typed editing** — read, edit, add and delete individual fields with inputs matching their type (text, numbers, booleans, dates with UTC offset, exact rationals, lists); the sidecar validates every value and decides what is editable
 - 🔒 **Verified atomic writes** — changes go to a private copy beside the file, are read back and checked, then replace the original (`ReplaceFileW` on Windows, `os.replace` elsewhere); a failure leaves the file untouched
 - ↩️ **Exact Undo** — up to 50 saves per session, restored byte for byte in the usual case (pictures and other binaries included; very large changes fall back to restoring the values); refused if the file changed meanwhile
+- 🛡️ **Prepare files for sharing** — the *Share* tab removes location, identity, device, dates, software, thumbnails and edit history in one undoable step; each field shows a privacy badge
+- 🗂️ **Batch operations** — on many files: prepare for sharing, shift dates, copy metadata, add a position (fixed or from a GPX track), rename from metadata, export a folder to CSV/JSON
+- 🔎 **Files recognized by content** — a file without (or with a wrong) extension is handled as its real format
 - 🔑 **File integrity hashes** — on-demand MD5 / SHA-1 / SHA-256 / SHA-512 / BLAKE2b with one-click copy
 - 🎨 **Cyber dark theme** — professional dark UI with cyan/blue accents
 - 📦 **Compiled binaries** — no Python or Node.js required to run
 - 💾 **Offline-first** — zero telemetry; the only network call is the optional update check
+- 🚪 **Clean exit** — the *Exit* button stops the background process and everything it started, and releases its memory and port
 - 🔔 **Update check** — manual from *About* / *Help*, or opt-in at startup; downloads are SHA-256 verified
 - 🆓 **Free & open-source** — MIT license
 
@@ -82,9 +88,7 @@ File (image / audio / video / document / anything)
 
 ## 🔧 Version
 
-**v0.3.5** (latest stable) — Security and reliability release: every sidecar API call is authenticated with a per-session token, the Electron renderer is sandboxed with a Content Security Policy, PDF/Office edits preserve unrelated content, audio/video edits are atomic, and Undo restores original values. Dependencies updated (Pillow, pypdf, Vite, Electron). No API changes.
-
-**Next: 0.4.0** (in development, not yet released) — update check and repository link in *About*; XMP and IPTC reading and writing for JPEG; typed values (lists, numbers, dates, exact rationals) instead of joined strings; adding fields; exact server-side Undo; uniform API errors; Linux packages built on a RHEL 9 baseline (Ubuntu 22.04+, Debian 12+, Fedora, RHEL 9/10).
+The badges at the top of this page always show the latest stable and beta releases.
 
 📖 **See full version history** → [CHANGELOG.md](./CHANGELOG.md)
 
@@ -180,14 +184,18 @@ Python Sidecar (FastAPI)
     ├── /read   — full metadata extraction (format + filesystem layer)
     ├── /write  — verified atomic write (and optional deletes) in one save
     ├── /delete — field removal
+    ├── /sanitize, /sanitize-many — prepare one or many files for sharing
+    ├── /shift-dates, /copy-tags, /geotag, /rename, /export — operations on several files
     ├── /undo   — exact undo of a save by its token
     ├── /diff   — metadata comparison
+    ├── /aliases — common names used by the search box
     └── /hash   — on-demand file hashing
 
 React Frontend (Vite + TailwindCSS)
     ├── FolderPanel  — folder tree navigation
     ├── FilePanel    — file list with metadata summary
-    └── DetailPanel  — Metadata / Edit / Diff tabs
+    ├── DetailPanel  — Metadata / Edit / Share / Diff tabs
+    └── BatchDialog  — operations on several files
 ```
 
 📖 Full endpoint reference → [API.md](docs/API.md)
@@ -258,5 +266,5 @@ Distributed with MIT License · [View License](LICENSE)
 
 ---
 
-*Last updated: 2026-11-03*
+*Last updated: 2026-11-04*
 *← [Requirements](docs/REQUIREMENTS.md) | [Docs →](docs/)*
