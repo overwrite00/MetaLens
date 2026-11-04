@@ -51,7 +51,7 @@ The **detail panel** (`DetailPanel`) opens on the **Metadata** tab by default, s
 - Multi-valued fields (artists, keywords, …) are shown as lists, never joined into one string.
 - A line above the table tells what sharing the file would reveal (location, identity, device, dates...), and each sensitive field carries a badge with its category.
 - Binary values (cover art, pictures, MakerNote, thumbnails) are shown as size, MIME type and SHA-256, not as their bytes.
-- Notices above the table explain why the format metadata is read-only (e.g. signed PDF, AAC, legacy Office), report read errors and show warnings (e.g. an EXIF MakerNote that is moved on rewrite, duplicated metadata segments).
+- Notices above the table explain why the format metadata is read-only (e.g. signed PDF, AAC, CR3/RAF), report read errors and show warnings (e.g. an EXIF MakerNote that is moved on rewrite, duplicated metadata segments).
 
 ---
 
@@ -62,7 +62,7 @@ Switch to the **Edit** tab to open `MetadataEditor`:
 - Editable fields show an input matching their type: text, multi-line text, number, checkbox (booleans), dropdown (enumerated values), exact `n/d` rationals, a list editor for multi-valued fields, fixed-size inputs for pairs such as track `[number, total]`, and date-time with a separate UTC offset (EXIF dates are local times without offset)
 - **Add field** offers the fields the format can store but the file does not have yet (e.g. an ID3 title on an untagged WAV, an XMP keyword list on a JPEG)
 - **Save** sends all edits, additions and deletions as **one** save. The sidecar validates every value first (invalid values are reported next to their field and nothing is written), applies the changes to a private copy next to the file, reads the copy back to check that exactly the requested changes were stored, and only then replaces the original (`ReplaceFileW` on Windows, keeping the security descriptor, alternate data streams and attributes such as *hidden*; `os.replace` elsewhere). A failure at any step leaves the original untouched. The file is replaced by a new one, so hard links to it are detached
-- When the format metadata is read-only (e.g. RAW, TIFF/PNG/WebP/GIF, AAC, MKV/AVI, legacy `.doc`/`.xls`/`.ppt`, encrypted or digitally signed PDFs, signed Office packages), the Edit tab shows a **read-only** notice with the reason; filesystem fields such as the modification time (`fs:mtime`) stay editable
+- When the format metadata is read-only (e.g. GIF/BMP, Canon CR3 and Fujifilm RAF raw files, AAC, AVI and other video read through the fallback, encrypted or digitally signed PDFs, signed Office packages; legacy `.doc`/`.xls`/`.ppt` allow removing properties but not editing them), the Edit tab shows a **read-only** notice with the reason; filesystem fields such as the modification time (`fs:mtime`) stay editable
 
 ---
 
