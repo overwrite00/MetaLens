@@ -7,6 +7,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — 
 
 ## [Unreleased] — Next Release
 
+### Changed
+- Development version bumped to 0.5.1 after the 0.5.0 release.
+
 ### Roadmap
 
 - [ ] **Batch Edit** — Apply a field change to multiple selected files at once
